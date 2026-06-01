@@ -21,6 +21,30 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  # 🚀 新增：大厂战袍插件
+  flutter_launcher_icons: "^0.13.1"
+  flutter_native_splash: "^2.4.0"
 
 flutter:
   uses-material-design: true
+
+# ------------------------------------------------------------
+# 🎨 战袍配置 A：App 图标生成器
+# ------------------------------------------------------------
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/logo.png"
+  min_sdk_android: 21 
+
+# ------------------------------------------------------------
+# 🎨 战袍配置 B：启动页（Splash Screen）生成器
+# ------------------------------------------------------------
+flutter_native_splash:
+  color: "#FF5E00"
+  image: "assets/logo.png"
+  android_12:
+    color: "#FF5E00"
+    icon_background_color: "#FF5E00"
+    image: "assets/logo.png"
+  fullscreen: true
