@@ -33,7 +33,6 @@ class _PublishTaskPageState extends State<PublishTaskPage> {
   bool _isGeocoding = false;
   bool _locationVerified = false;
 
-  // 🌟 核心新增：灵感轮播引擎
   Timer? _hintTimer;
   int _currentHintIndex = 0;
   final List<String> _hintExamples = [
@@ -47,7 +46,6 @@ class _PublishTaskPageState extends State<PublishTaskPage> {
   @override
   void initState() {
     super.initState();
-    // ⏰ 启动 3 秒轮播器
     _startHintTimer();
   }
 
@@ -55,7 +53,6 @@ class _PublishTaskPageState extends State<PublishTaskPage> {
     _hintTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
       if (mounted) {
         setState(() {
-          // 不断循环切换索引：0 -> 1 -> 2 -> 3 -> 4 -> 0
           _currentHintIndex = (_currentHintIndex + 1) % _hintExamples.length;
         });
       }
@@ -64,9 +61,7 @@ class _PublishTaskPageState extends State<PublishTaskPage> {
 
   @override
   void dispose() {
-    // 🛡️ 防内存泄漏：页面关闭时，必须强行炸毁这个计时器！
     _hintTimer?.cancel();
-
     _descController.dispose();
     _locationController.dispose();
     _amountController.dispose();
@@ -82,7 +77,6 @@ class _PublishTaskPageState extends State<PublishTaskPage> {
     return '$_timeValue $_timeUnit';
   }
 
-  // 📍 模式 1：获取我当前的 GPS
   Future<void> _getCurrentLocation() async {
     setState(() => _isFetchingLocation = true);
     try {
@@ -140,7 +134,6 @@ class _PublishTaskPageState extends State<PublishTaskPage> {
     }
   }
 
-  // 🌍 模式 2：解析异地手写地址
   Future<void> _verifyRemoteAddress() async {
     final address = _locationController.text.trim();
     if (address.isEmpty) {
@@ -189,13 +182,15 @@ class _PublishTaskPageState extends State<PublishTaskPage> {
     }
   }
 
-  // 🚀 提交发布
+  // =================================================================
+  // 🚨 核心升级：带有“查余额+扣钱”的金融级原子提交引擎！
+  // =================================================================
   Future<void> _submitTask() async {
     final desc = _descController.text.trim();
     final location = _locationController.text.trim();
-    final amount = _amountController.text.trim();
+    final amountText = _amountController.text.trim();
 
-    if (desc.isEmpty || location.isEmpty || amount.isEmpty) {
+    if (desc.isEmpty || location.isEmpty || amountText.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('老板，请填满描述、地点和金额哦！'),
@@ -204,6 +199,20 @@ class _PublishTaskPageState extends State<PublishTaskPage> {
       );
       return;
     }
+
+    final double perPersonAmount = double.tryParse(amountText) ?? 0.0;
+    if (perPersonAmount <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('金额必须大于 0 呀！'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    // 💡 1. 计算要扣除的总金额
+    final double totalCost = perPersonAmount * _peopleCount;
 
     if (!_locationVerified || _latitude == null || _longitude == null) {
       setState(() => _isLoading = true);
@@ -217,11 +226,10 @@ class _PublishTaskPageState extends State<PublishTaskPage> {
         }
       } catch (e) {
         if (!mounted) return;
-
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('坐标解析失败！请点击地址栏右侧的🔍放大镜验证地址。'),
+            content: Text('坐标解析失败！请点击放大镜验证。'),
             backgroundColor: Colors.red,
           ),
         );
@@ -233,40 +241,88 @@ class _PublishTaskPageState extends State<PublishTaskPage> {
 
     try {
       final user = FirebaseAuth.instance.currentUser;
-      final String? uid = user?.uid;
-      final String publisherName = user?.displayName ?? 'XOLV 雇主';
+      if (user == null) throw '请先登录！';
 
-      await FirebaseFirestore.instance.collection('tasks').add({
-        'description': desc,
-        'location': location,
-        'amount': amount,
-        'peopleCount': _peopleCount,
-        'acceptedCount': 0,
-        'acceptedUsers': <String>[],
-        'expectedTime': _formattedTimeString,
-        'expectedTimeHours': _calculatedTotalHours,
-        'latitude': _latitude,
-        'longitude': _longitude,
-        'publisherId': uid ?? 'anonymous',
-        'publisherName': publisherName,
-        'createdAt': FieldValue.serverTimestamp(),
-        'status': 'pending',
+      final userRef = FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid);
+      final newTaskRef = FirebaseFirestore.instance.collection('tasks').doc();
+      final newTxRef = FirebaseFirestore.instance
+          .collection('transactions')
+          .doc();
+
+      // 💡 2. 启动金融级交易锁 (Transaction)
+      await FirebaseFirestore.instance.runTransaction((transaction) async {
+        // 第一步：去云端查老板的账本
+        final userDoc = await transaction.get(userRef);
+        final double currentBalance = (userDoc.data()?['wallet_balance'] ?? 0.0)
+            .toDouble();
+
+        // 第二步：余额拦截器
+        if (currentBalance < totalCost) {
+          throw Exception('INSUFFICIENT_FUNDS'); // 如果钱不够，立刻抛出异常，中断所有操作！
+        }
+
+        // 第三步：扣除余额
+        transaction.update(userRef, {
+          'wallet_balance': currentBalance - totalCost,
+        });
+
+        // 第四步：把任务写上广场
+        transaction.set(newTaskRef, {
+          'description': desc,
+          'location': location,
+          'amount': perPersonAmount.toStringAsFixed(2),
+          'peopleCount': _peopleCount,
+          'acceptedCount': 0,
+          'acceptedUsers': <String>[],
+          'expectedTime': _formattedTimeString,
+          'expectedTimeHours': _calculatedTotalHours,
+          'latitude': _latitude,
+          'longitude': _longitude,
+          'publisherId': user.uid,
+          'publisherName': user.displayName ?? 'XOLV 雇主',
+          'createdAt': FieldValue.serverTimestamp(),
+          'status': 'pending',
+        });
+
+        // 第五步：在钱包里写一条扣款流水
+        transaction.set(newTxRef, {
+          'userId': user.uid,
+          'title':
+              '发布任务押金 - ${desc.length > 5 ? '${desc.substring(0, 5)}...' : desc}',
+          'amount': -totalCost, // 负数代表扣款
+          'type': 'fee',
+          'createdAt': FieldValue.serverTimestamp(),
+          'status': '系统扣除',
+        });
       });
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('🎉 任务发布成功！'),
+            content: Text('🎉 任务发布成功！资金已安全冻结。'),
             backgroundColor: Colors.green,
           ),
         );
-        Navigator.pop(context);
+        Navigator.pop(context); // 退出发布页面，回到广场
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('失败: $e'), backgroundColor: Colors.red),
-        );
+        if (e.toString().contains('INSUFFICIENT_FUNDS')) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                '❌ 余额不足啦！发布此任务共需 RM ${totalCost.toStringAsFixed(2)}，请先充值！',
+              ),
+              backgroundColor: Colors.red,
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('失败: $e'), backgroundColor: Colors.red),
+          );
+        }
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -299,14 +355,11 @@ class _PublishTaskPageState extends State<PublishTaskPage> {
                     style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
-
-                  // 🌟 核心升级：保留灵感轮播，彻底解决键盘断触 bug！
                   TextField(
                     controller: _descController,
                     maxLines: 3,
                     decoration: InputDecoration(
-                      hintText:
-                          _hintExamples[_currentHintIndex], // ⏰ 依然每3秒切换提示语
+                      hintText: _hintExamples[_currentHintIndex],
                       hintStyle: TextStyle(
                         color: Colors.grey[400],
                         fontSize: 14,
@@ -392,7 +445,6 @@ class _PublishTaskPageState extends State<PublishTaskPage> {
                           },
                           decoration: InputDecoration(
                             hintText: '或手动输入异地地址 (如: 父母家)',
-                            hintStyle: const TextStyle(fontSize: 14),
                             filled: true,
                             fillColor: Colors.white,
                             prefixIcon: const Icon(
@@ -416,7 +468,6 @@ class _PublishTaskPageState extends State<PublishTaskPage> {
                                           : Colors.black,
                                     ),
                                     onPressed: _verifyRemoteAddress,
-                                    tooltip: '解析该地址坐标',
                                   ),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
@@ -428,7 +479,7 @@ class _PublishTaskPageState extends State<PublishTaskPage> {
                           const Padding(
                             padding: EdgeInsets.only(top: 8.0, left: 4),
                             child: Text(
-                              '✅ 坐标已锁定！广场接单员将以此地为中心看到您的委托。',
+                              '✅ 坐标已锁定！',
                               style: TextStyle(
                                 color: Colors.green,
                                 fontSize: 12,

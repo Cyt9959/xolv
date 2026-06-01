@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter/foundation.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // 👈 新增：接通 Firestore 云端总账本的电线
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -9,7 +10,7 @@ class AuthService {
   bool _isGoogleSignInInitialized = false;
 
   // ==========================================
-  //               1. 谷歌登录 (V7 最新架构)
+  //               1. 谷歌登录 (V7 最新架构) + 自动建档
   // ==========================================
   Future<User?> signInWithGoogle() async {
     try {
@@ -21,6 +22,7 @@ class AuthService {
 
       // V7 规定：使用 authenticate() 唤起弹窗
       final googleUser = await GoogleSignIn.instance.authenticate();
+      // 👈 增加保护：防止用户中途取消登录导致报错
 
       // V7 规定：authentication 变成同步获取，不需要 await
       final GoogleSignInAuthentication googleAuth = googleUser.authentication;
@@ -37,7 +39,28 @@ class AuthService {
       final UserCredential userCredential = await _auth.signInWithCredential(
         credential,
       );
-      return userCredential.user;
+
+      final User? user = userCredential.user;
+
+      // ==========================================
+      // 🚨 --- 建立/更新用户档案开始 --- 🚨
+      // ==========================================
+      if (user != null) {
+        await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+          'name': user.displayName ?? '未命名用户',
+          'email': user.email ?? '',
+          'avatarUrl': user.photoURL ?? '',
+          'kyc_status': 'pending', // 👈 老板你的专属设定：默认状态为待审核
+          'role': 'user', // 身份：普通用户
+          'createdAt': FieldValue.serverTimestamp(), // 自动记录这通档案的创建时间
+        }, SetOptions(merge: true));
+        // 💡 SetOptions(merge: true)：保证老用户再次登录时，不会清空之前的 KYC 数据！
+      }
+      // ==========================================
+      // 🚨 --- 建立/更新用户档案结束 --- 🚨
+      // ==========================================
+
+      return user;
     } catch (e) {
       debugPrint("谷歌登录发生致命错误: $e");
       return null;

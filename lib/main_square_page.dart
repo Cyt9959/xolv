@@ -9,6 +9,8 @@ import 'task_detail_page.dart';
 import 'review_applications_page.dart';
 import 'task_chat_page.dart';
 import 'wallet_page.dart';
+import 'kyc_page.dart';
+import 'screens/kyc_review_page.dart'; // 👑 引入老板审核大厅
 
 class MainSquarePage extends StatefulWidget {
   const MainSquarePage({super.key});
@@ -29,12 +31,112 @@ class _MainSquarePageState extends State<MainSquarePage> {
       body: IndexedStack(index: _currentIndex == 2 ? 1 : 0, children: _pages),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
-        onTap: (index) {
+        onTap: (index) async {
+          // 👈 核心升级：变成异步雷达，用来查云端身份
           if (index == 1) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const PublishTaskPage()),
+            final user = FirebaseAuth.instance.currentUser;
+            if (user == null) {
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(const SnackBar(content: Text('请先登录！')));
+              return;
+            }
+
+            // ⚡ 1. 弹出安检扫描圈，防止用户狂点
+            showDialog(
+              context: context,
+              barrierDismissible: false,
+              builder: (_) => const Center(child: CircularProgressIndicator()),
             );
+
+            try {
+              // ⚡ 2. 去云端调取该用户的档案，查看 kyc_status
+              final doc = await FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(user.uid)
+                  .get();
+              if (context.mounted) Navigator.pop(context); // 关掉扫描圈
+
+              final kycStatus = doc.data()?['kyc_status'] ?? 'none';
+
+              // ⚡ 3. 终极审判逻辑
+              if (kycStatus == 'approved') {
+                // ✅ 绿灯：放行进入发布页面
+                if (context.mounted) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const PublishTaskPage()),
+                  );
+                }
+              } else {
+                // ❌ 红灯：拦截并引导去认证
+                if (context.mounted) {
+                  showDialog(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      title: const Row(
+                        children: [
+                          Icon(Icons.security, color: Colors.orange),
+                          SizedBox(width: 8),
+                          Text(
+                            '安全拦截',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 18,
+                            ),
+                          ),
+                        ],
+                      ),
+                      content: const Text(
+                        '老板，为了保障全网用户的资金与交易安全，您目前还未通过实名认证（或仍在审核中）。\n\n必须认证通过后，才能发布悬赏委托哦！',
+                        style: TextStyle(height: 1.5),
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          child: const Text(
+                            '稍后再说',
+                            style: TextStyle(color: Colors.grey),
+                          ),
+                        ),
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: primaryColor,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                          onPressed: () {
+                            Navigator.pop(ctx); // 关闭弹窗
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const KYCPage(),
+                              ),
+                            ); // 直接保送到认证中心
+                          },
+                          child: const Text(
+                            '立即去认证',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+              }
+            } catch (e) {
+              if (context.mounted) {
+                Navigator.pop(context); // 发生错误也要关掉圈圈
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(SnackBar(content: Text('网络验证失败: $e')));
+              }
+            }
           } else {
             setState(() => _currentIndex = index);
           }
@@ -496,61 +598,255 @@ class _ProfileView extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 16),
-                        InkWell(
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const WalletPage(),
-                            ),
-                          ),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 10,
-                            ),
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [
-                                  primaryColor,
-                                  primaryColor.withValues(alpha: 0.8),
-                                ],
-                              ),
-                              borderRadius: BorderRadius.circular(12),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: primaryColor.withValues(alpha: 0.2),
-                                  blurRadius: 8,
-                                  offset: const Offset(0, 4),
-                                ),
-                              ],
-                            ),
-                            child: const Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  Icons.account_balance_wallet,
-                                  color: Colors.white,
-                                  size: 16,
-                                ),
-                                SizedBox(width: 8),
-                                Text(
-                                  '我的钱包: RM 45.00',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 12,
+
+                        // 💰 云端钱包按钮
+                        if (user != null)
+                          StreamBuilder<DocumentSnapshot>(
+                            stream: FirebaseFirestore.instance
+                                .collection('users')
+                                .doc(user.uid)
+                                .snapshots(),
+                            builder: (context, snapshot) {
+                              double balance = 0.00;
+                              if (snapshot.hasData && snapshot.data!.exists) {
+                                final data =
+                                    snapshot.data!.data()
+                                        as Map<String, dynamic>?;
+                                balance = (data?['wallet_balance'] ?? 0.0)
+                                    .toDouble();
+                              }
+
+                              return InkWell(
+                                onTap: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => const WalletPage(),
                                   ),
                                 ),
-                                SizedBox(width: 4),
-                                Icon(
-                                  Icons.chevron_right,
-                                  color: Colors.white,
-                                  size: 14,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 14,
+                                    vertical: 10,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      colors: [
+                                        primaryColor,
+                                        primaryColor.withValues(alpha: 0.8),
+                                      ],
+                                    ),
+                                    borderRadius: BorderRadius.circular(12),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: primaryColor.withValues(
+                                          alpha: 0.2,
+                                        ),
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 4),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(
+                                        Icons.account_balance_wallet,
+                                        color: Colors.white,
+                                        size: 16,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        '我的钱包: RM ${balance.toStringAsFixed(2)}',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      const Icon(
+                                        Icons.chevron_right,
+                                        color: Colors.white,
+                                        size: 14,
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                              ],
+                              );
+                            },
+                          ),
+
+                        const SizedBox(height: 12),
+
+                        // 🛡️ 云端实名认证按钮
+                        if (user != null)
+                          StreamBuilder<DocumentSnapshot>(
+                            stream: FirebaseFirestore.instance
+                                .collection('kyc_applications')
+                                .doc(user.uid)
+                                .snapshots(),
+                            builder: (context, snapshot) {
+                              if (snapshot.connectionState ==
+                                  ConnectionState.waiting) {
+                                return const Padding(
+                                  padding: EdgeInsets.symmetric(
+                                    vertical: 8.0,
+                                    horizontal: 16.0,
+                                  ),
+                                  child: SizedBox(
+                                    height: 16,
+                                    width: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  ),
+                                );
+                              }
+
+                              String status = 'none';
+                              if (snapshot.hasData && snapshot.data!.exists) {
+                                final data =
+                                    snapshot.data!.data()
+                                        as Map<String, dynamic>?;
+                                status = data?['status'] ?? 'none';
+                              }
+
+                              Color bgColor;
+                              Color borderColor;
+                              Color textColor;
+                              String text;
+                              IconData icon;
+                              VoidCallback? onTap;
+
+                              if (status == 'pending') {
+                                bgColor = Colors.orange[50]!;
+                                borderColor = Colors.orange[200]!;
+                                textColor = Colors.orange[800]!;
+                                text = '审核中，请耐心等待';
+                                icon = Icons.hourglass_top_rounded;
+                                onTap = null;
+                              } else if (status == 'approved') {
+                                bgColor = Colors.green[50]!;
+                                borderColor = Colors.green[200]!;
+                                textColor = Colors.green[800]!;
+                                text = '已实名认证';
+                                icon = Icons.verified;
+                                onTap = null;
+                              } else if (status == 'rejected') {
+                                bgColor = Colors.red[50]!;
+                                borderColor = Colors.red[200]!;
+                                textColor = Colors.red[800]!;
+                                text = '认证被驳回，请重试';
+                                icon = Icons.error_outline;
+                                onTap = () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => const KYCPage(),
+                                  ),
+                                );
+                              } else {
+                                bgColor = Colors.green[50]!;
+                                borderColor = Colors.green[200]!;
+                                textColor = Colors.green;
+                                text = '去完成实名认证';
+                                icon = Icons.verified_user;
+                                onTap = () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => const KYCPage(),
+                                  ),
+                                );
+                              }
+
+                              return InkWell(
+                                onTap: onTap,
+                                borderRadius: BorderRadius.circular(12),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 14,
+                                    vertical: 10,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: bgColor,
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(color: borderColor),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(icon, color: textColor, size: 16),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        text,
+                                        style: TextStyle(
+                                          color: textColor,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                      if (onTap != null) ...[
+                                        const SizedBox(width: 4),
+                                        Icon(
+                                          Icons.chevron_right,
+                                          color: textColor,
+                                          size: 14,
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+
+                        const SizedBox(height: 12),
+
+                        // 👑 老板专属秘密审核台入口
+                        if (user != null && user.email == 'chuitheen@gmail.com')
+                          InkWell(
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const KycReviewPage(),
+                              ),
+                            ),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 10,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.purple[50],
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: Colors.purple[200]!),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.admin_panel_settings,
+                                    color: Colors.purple[700],
+                                    size: 16,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    '进入老板审核台',
+                                    style: TextStyle(
+                                      color: Colors.purple[700],
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Icon(
+                                    Icons.chevron_right,
+                                    color: Colors.purple[700],
+                                    size: 14,
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
-                        ),
                       ],
                     ),
                   ),
@@ -582,7 +878,7 @@ class _ProfileView extends StatelessWidget {
 }
 
 // ------------------------------------------------------------
-// 💼 我的委托 (雇主视角：全面恢复了详细的控制面板卡片)
+// 💼 我的委托 (雇主视角)
 // ------------------------------------------------------------
 class _MyPostedTasksView extends StatelessWidget {
   final String currentUid;
@@ -702,7 +998,6 @@ class _MyPostedTasksView extends StatelessWidget {
           .where('publisherId', isEqualTo: currentUid)
           .snapshots(),
       builder: (context, snapshot) {
-        // 💡 修复警告 3：加上了大括号
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
           return const Center(child: Text('暂无发布'));
         }
@@ -771,7 +1066,6 @@ class _MyPostedTasksView extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      // 💡 警告 2 消除：恢复了使用 _deleteTask 的删除按钮
                       trailing: rawStatus == 'pending'
                           ? IconButton(
                               icon: const Icon(
@@ -851,7 +1145,6 @@ class _MyPostedTasksView extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(horizontal: 16.0),
                         child: Align(
                           alignment: Alignment.centerLeft,
-                          // 💡 警告 1 消除：恢复了使用 ReviewApplicationsPage 的按钮
                           child: TextButton.icon(
                             icon: Icon(
                               Icons.gavel,
@@ -887,7 +1180,7 @@ class _MyPostedTasksView extends StatelessWidget {
 }
 
 // ------------------------------------------------------------
-// 🏃‍♂️ 我的任务 (接单人视角：全面恢复了进入群聊等高级卡片)
+// 🏃‍♂️ 我的任务 (接单人视角)
 // ------------------------------------------------------------
 class _MyAcceptedTasksView extends StatelessWidget {
   final String currentUid;
@@ -903,7 +1196,6 @@ class _MyAcceptedTasksView extends StatelessWidget {
           .where('acceptedUsers', arrayContains: currentUid)
           .snapshots(),
       builder: (context, snapshot) {
-        // 💡 修复警告 4：加上了大括号
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
           return const Center(child: Text('暂无接单'));
         }

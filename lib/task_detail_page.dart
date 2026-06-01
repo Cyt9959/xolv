@@ -1,439 +1,303 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'kyc_page.dart'; // 引入信任中心
 
 class TaskDetailPage extends StatefulWidget {
   final String taskId;
   final Map<String, dynamic> taskData;
+
   const TaskDetailPage({
     super.key,
     required this.taskId,
     required this.taskData,
   });
+
   @override
   State<TaskDetailPage> createState() => _TaskDetailPageState();
 }
 
 class _TaskDetailPageState extends State<TaskDetailPage> {
-  bool _isSubmitting = false;
+  bool _isApplying = false;
 
-  // 🚀 核心重构：不管是“直接接单”还是“谈价谈判”，统一走申请管道写入云端！
-  Future<void> _submitApplication({
-    required String type,
-    required String amount,
-    required String reason,
-  }) async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-
-    if (user.uid == widget.taskData['publisherId']) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('老板，不能接自己发布的单哦'),
-          backgroundColor: Colors.orange,
-        ),
-      );
-      return;
-    }
-
-    setState(() => _isSubmitting = true);
-
+  // ⚡ 核心功能：带 KYC 拦截器与防刷单的接单逻辑
+  Future<void> _applyForTask() async {
+    setState(() => _isApplying = true);
     try {
-      // 写入统一的 applications 子集合
-      await FirebaseFirestore.instance
-          .collection('tasks')
-          .doc(widget.taskId)
-          .collection('applications')
-          .add({
-            'takerId': user.uid,
-            'takerName': user.displayName ?? 'XOLV 伙伴',
-            'proposedAmount': amount,
-            'reason': reason,
-            'type': type, // 'direct_claim' (直接接单) 或 'negotiation' (出价谈判)
-            'status': 'pending',
-            'createdAt': FieldValue.serverTimestamp(),
-          });
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) throw Exception('未登录');
+
+      // 🚨 第 0 步：防刷单机制！雇主绝对不能接自己的单！
+      final String publisherId = widget.taskData['publisherId'] ?? '';
+      if (publisherId == user.uid) {
+        _showErrorDialog('老板，您不能接自己发布的悬赏哦！');
+        setState(() => _isApplying = false);
+        return;
+      }
+
+      // 🚨 第 1 步：查档！(修复了极其致命的下划线 Bug)
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+
+      // ⚠️ 重点：数据库里存的是 kyc_status！
+      final kycStatus = userDoc.data()?['kyc_status'] ?? 'none';
+
+      // 🛡️ 第 2 步：智能拦截！
+      if (kycStatus == 'none' || kycStatus == 'unverified') {
+        _showKYCDialog('【平台安全合规】\n为了保障雇主资金安全，接单前必须完成大马卡实名建档！', true);
+        setState(() => _isApplying = false);
+        return; // 🛑 拦截
+      } else if (kycStatus == 'pending') {
+        _showKYCDialog('【审核中】\n您的实名资料正在人工审核中，通过后即可抢单！', false);
+        setState(() => _isApplying = false);
+        return; // 🛑 拦截
+      } else if (kycStatus == 'rejected') {
+        _showKYCDialog('【认证失败】\n您的实名资料不符合要求，请重新拍摄清晰的证件。', true);
+        setState(() => _isApplying = false);
+        return; // 🛑 拦截
+      }
+
+      // 🚨 第 2.5 步：防重复投递机制 (查云端是否已经投过简历了)
+      final existingApp = await FirebaseFirestore.instance
+          .collection('task_applications')
+          .where('taskId', isEqualTo: widget.taskId)
+          .where('applicantId', isEqualTo: user.uid)
+          .get();
+
+      if (existingApp.docs.isNotEmpty) {
+        _showErrorDialog('您已经申请过这个任务啦，请耐心等待雇主审核录用！');
+        setState(() => _isApplying = false);
+        return; // 🛑 拦截
+      }
+
+      // ✅ 第 3 步：身份核验全绿灯，正式提交接单申请！
+      await FirebaseFirestore.instance.collection('task_applications').add({
+        'taskId': widget.taskId,
+        'applicantId': user.uid,
+        'applicantName': user.displayName ?? 'XOLV 闪电小哥',
+        'status': 'pending',
+        'appliedAt': FieldValue.serverTimestamp(),
+      });
 
       if (mounted) {
-        showDialog(
-          context: context,
-          builder: (ctx) => AlertDialog(
-            title: const Text('🎉 申请已提交'),
-            content: Text(
-              type == 'direct_claim'
-                  ? '接单意向已送达老板后台！请耐心等待老板审核录用。'
-                  : '谈判出价已送达！老板同意后将自动加入项目。',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  Navigator.pop(ctx);
-                  Navigator.pop(context);
-                },
-                child: const Text('好的'),
-              ),
-            ],
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✅ 接单申请已发送，请等待雇主录用！'),
+            backgroundColor: Colors.green,
           ),
         );
+        Navigator.pop(context); // 退回广场
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('提交失败: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('错误: $e'), backgroundColor: Colors.red),
+        );
       }
     } finally {
-      if (mounted) setState(() => _isSubmitting = false);
+      if (mounted) setState(() => _isApplying = false);
     }
   }
 
-  void _showNegotiationBottomSheet() {
-    final priceController = TextEditingController();
-    final reasonController = TextEditingController();
-
-    showModalBottomSheet(
+  // 🛑 通用错误提示弹窗
+  void _showErrorDialog(String message) {
+    showDialog(
       context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.only(
-          topLeft: Radius.circular(24),
-          topRight: Radius.circular(24),
-        ),
-      ),
-      builder: (context) => Padding(
-        padding: EdgeInsets.only(
-          top: 24,
-          left: 24,
-          right: 24,
-          bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
           children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.orange),
+            SizedBox(width: 8),
+            Text('拦截提示', style: TextStyle(fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Text(
+          message,
+          style: const TextStyle(height: 1.5, fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('我知道了', style: TextStyle(color: Colors.grey)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 🛑 KYC 专属拦截弹窗 UI
+  void _showKYCDialog(String message, bool showGoToKYC) {
+    final primaryColor = Theme.of(context).colorScheme.primary;
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Icon(Icons.gpp_bad, color: primaryColor, size: 28),
+            const SizedBox(width: 8),
             const Text(
-              '发起赏金谈判',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: priceController,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                labelText: '您期望的每人可得金额 (RM)',
-                prefixIcon: const Icon(Icons.attach_money),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: reasonController,
-              maxLines: 3,
-              decoration: InputDecoration(
-                hintText: '写下您的谈价理由...',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: () {
-                final p = priceController.text.trim();
-                final r = reasonController.text.trim();
-                if (p.isEmpty || r.isEmpty) return;
-                _submitApplication(type: 'negotiation', amount: p, reason: r);
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.black,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              child: const Text(
-                '提交谈判申请',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-              ),
+              '安全拦截',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
             ),
           ],
         ),
+        content: Text(
+          message,
+          style: const TextStyle(height: 1.5, fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('稍后再说', style: TextStyle(color: Colors.grey)),
+          ),
+          if (showGoToKYC)
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context); // 关掉弹窗
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const KYCPage()),
+                ); // 强制押送去认证中心！
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text(
+                '立即前往认证',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+        ],
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<DocumentSnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('tasks')
-          .doc(widget.taskId)
-          .snapshots(),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData || !snapshot.data!.exists) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
-        }
-        final data = snapshot.data!.data() as Map<String, dynamic>;
+    final data = widget.taskData;
+    final primaryColor = Theme.of(context).colorScheme.primary;
 
-        final int peopleCount = data['peopleCount'] ?? 1;
-        final int acceptedCount = data['acceptedCount'] ?? 0;
-        final List<dynamic> acceptedUsers = data['acceptedUsers'] ?? [];
-        final currentUid = FirebaseAuth.instance.currentUser?.uid;
-        final bool alreadyJoined = acceptedUsers.contains(currentUid);
-
-        return Scaffold(
-          appBar: AppBar(
-            title: const Text('委托详情'),
-            backgroundColor: Colors.white,
-            foregroundColor: Colors.black,
-            elevation: 0.5,
-          ),
-          body: Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Column(
-                    children: [
-                      const Text('每人赏金', style: TextStyle(color: Colors.grey)),
-                      Text(
-                        'RM ${data['amount']}',
-                        style: const TextStyle(
-                          fontSize: 40,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.blue,
-                        ),
-                      ),
-                    ],
-                  ),
+    return Scaffold(
+      backgroundColor: Colors.grey[50],
+      appBar: AppBar(
+        title: const Text(
+          '任务详情',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black,
+        elevation: 0.5,
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 💰 赏金卡片
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [primaryColor, primaryColor.withValues(alpha: 0.8)],
                 ),
-                const Divider(height: 48),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    _buildDetailItem(
-                      Icons.people,
-                      "招募进度",
-                      "$acceptedCount / $peopleCount 人",
-                      valueColor: Colors.orange,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: primaryColor.withValues(alpha: 0.3),
+                    blurRadius: 10,
+                    offset: const Offset(0, 5),
+                  ),
+                ],
+              ),
+              child: Column(
+                children: [
+                  const Text(
+                    '悬赏金额',
+                    style: TextStyle(color: Colors.white70, fontSize: 14),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'RM ${data['amount']}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 36,
+                      fontWeight: FontWeight.w900,
                     ),
-                    _buildDetailItem(
-                      Icons.timer,
-                      "时间期限",
-                      "${data['expectedTime']}",
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 30),
-                const Text(
-                  '任务描述',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  data['description'] ?? '',
-                  style: const TextStyle(
-                    fontSize: 16,
-                    height: 1.5,
-                    color: Colors.black87,
                   ),
-                ),
-                const SizedBox(height: 30),
-                const Text(
-                  '送达地点',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    const Icon(Icons.location_on, color: Colors.redAccent),
-                    const SizedBox(width: 5),
-                    Expanded(
-                      child: Text(
-                        data['location'] ?? '',
-                        style: const TextStyle(fontSize: 15),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 24),
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.blue[50],
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(Icons.info_outline, size: 20, color: Colors.blue),
-                      SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          '温馨提示：时间期限仅为委托人期望的完成时间。超时系统不会进行自动惩罚，接单后您可以与委托人自由沟通并调整细节。',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: Colors.blueGrey,
-                            height: 1.5,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const Spacer(),
-
-                _buildBottomActionButtons(
-                  alreadyJoined,
-                  acceptedCount,
-                  peopleCount,
-                  currentUid == data['publisherId'],
-                  data['amount'] ?? '0.00',
-                ),
-              ],
+                ],
+              ),
             ),
+            const SizedBox(height: 24),
+            // 📝 任务描述
+            const Text(
+              '任务内容',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              data['description'] ?? '无描述',
+              style: const TextStyle(
+                fontSize: 16,
+                height: 1.5,
+                color: Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 24),
+            // 📍 任务信息
+            const Divider(),
+            const SizedBox(height: 16),
+            _buildInfoRow(Icons.timer, '期望完成时间', data['expectedTime'] ?? '尽快'),
+            const SizedBox(height: 12),
+            _buildInfoRow(
+              Icons.group,
+              '招募人数',
+              '${data['acceptedCount'] ?? 0} / ${data['peopleCount'] ?? 1} 人',
+            ),
+          ],
+        ),
+      ),
+      // 🚀 底部接单按钮
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: ElevatedButton(
+            onPressed: _isApplying ? null : _applyForTask,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: primaryColor,
+              foregroundColor: Colors.white,
+              minimumSize: const Size(double.infinity, 54),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: _isApplying
+                ? const CircularProgressIndicator(color: Colors.white)
+                : const Text(
+                    '⚡ 我要接单',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 
-  Widget _buildBottomActionButtons(
-    bool alreadyJoined,
-    int acceptedCount,
-    int peopleCount,
-    bool isPublisher,
-    String originalAmount,
-  ) {
-    if (_isSubmitting) return const Center(child: CircularProgressIndicator());
-    if (alreadyJoined) {
-      return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 18),
-        decoration: BoxDecoration(
-          color: Colors.green[50],
-          borderRadius: BorderRadius.circular(12),
-        ),
-        alignment: Alignment.center,
-        child: const Text(
-          '您已在队伍中 🏃',
-          style: TextStyle(
-            color: Colors.green,
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      );
-    }
-    if (acceptedCount >= peopleCount) {
-      return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 18),
-        decoration: BoxDecoration(
-          color: Colors.grey[300],
-          borderRadius: BorderRadius.circular(12),
-        ),
-        alignment: Alignment.center,
-        child: const Text(
-          '名额已满啦',
-          style: TextStyle(
-            color: Colors.grey,
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      );
-    }
-    if (isPublisher) {
-      return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 18),
-        decoration: BoxDecoration(
-          color: Colors.orange[50],
-          borderRadius: BorderRadius.circular(12),
-        ),
-        alignment: Alignment.center,
-        child: const Text(
-          '这是您的委托，请到个人中心审批接单申请',
-          style: TextStyle(
-            color: Colors.orange,
-            fontSize: 14,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      );
-    }
-
+  Widget _buildInfoRow(IconData icon, String label, String value) {
     return Row(
       children: [
-        Expanded(
-          child: OutlinedButton(
-            onPressed: _showNegotiationBottomSheet,
-            style: OutlinedButton.styleFrom(
-              foregroundColor: Colors.blue,
-              side: const BorderSide(color: Colors.blue, width: 1.5),
-              padding: const EdgeInsets.symmetric(vertical: 18),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-            child: const Text(
-              '我有异议/谈价',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-            ),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: ElevatedButton(
-            // 💡 核心修改：点击抢单，直接提交 type: 'direct_claim' 类型的申请！
-            onPressed: () => _submitApplication(
-              type: 'direct_claim',
-              amount: originalAmount,
-              reason: '申请直接抢单接单',
-            ),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.black,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 18),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-            child: const Text(
-              '立即申请抢单',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildDetailItem(
-    IconData icon,
-    String label,
-    String value, {
-    Color valueColor = Colors.black,
-  }) {
-    return Column(
-      children: [
-        Icon(icon, color: Colors.grey),
-        const SizedBox(height: 4),
-        Text(label, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+        Icon(icon, color: Colors.grey, size: 20),
+        const SizedBox(width: 8),
+        Text(label, style: const TextStyle(color: Colors.grey, fontSize: 14)),
+        const Spacer(),
         Text(
           value,
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 17,
-            color: valueColor,
-          ),
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
         ),
       ],
     );

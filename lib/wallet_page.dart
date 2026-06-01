@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class WalletPage extends StatefulWidget {
   const WalletPage({super.key});
@@ -8,38 +10,72 @@ class WalletPage extends StatefulWidget {
 }
 
 class _WalletPageState extends State<WalletPage> {
-  // 模拟钱包数据
-  final double _availableBalance = 45.00; // 假设已经赚了RM50，扣了RM5认证费
-  final double _escrowBalance = 50.00; // 假设还有一个进行中的任务钱被平台锁着
+  final user = FirebaseAuth.instance.currentUser;
 
-  // 模拟交易记录
-  final List<Map<String, dynamic>> _transactions = [
-    {
-      'title': '任务酬金 - 代买粿条',
-      'date': '2023-10-24 14:20',
-      'amount': 15.00,
-      'type': 'income',
-      'status': '已入账',
-    },
-    {
-      'title': '终身实名认证建档费',
-      'date': '2023-10-24 14:21',
-      'amount': -5.00,
-      'type': 'fee',
-      'status': '系统扣除',
-    },
-    {
-      'title': '任务酬金 - 帮看父母',
-      'date': '2023-10-23 10:00',
-      'amount': 35.00,
-      'type': 'income',
-      'status': '已入账',
-    },
-  ];
+  // 💡 这是一个模拟充值的方法，用来给你测试扣钱
+  Future<void> _simulateTopUp() async {
+    if (user == null) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      final double topUpAmount = 50.00; // 每次充值 50 块
+
+      final batch = FirebaseFirestore.instance.batch();
+      final userRef = FirebaseFirestore.instance
+          .collection('users')
+          .doc(user!.uid);
+      final txRef = FirebaseFirestore.instance.collection('transactions').doc();
+
+      // 1. 给钱包加钱 (使用 FieldValue.increment)
+      batch.update(userRef, {
+        'wallet_balance': FieldValue.increment(topUpAmount),
+      });
+
+      // 2. 写入一条流水
+      batch.set(txRef, {
+        'userId': user!.uid,
+        'title': '微信/银行卡充值',
+        'amount': topUpAmount,
+        'type': 'income',
+        'createdAt': FieldValue.serverTimestamp(),
+        'status': '已入账',
+      });
+
+      await batch.commit();
+
+      if (mounted) {
+        Navigator.pop(context); // 关掉圈圈
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✅ 成功充值 RM 50.00！'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) Navigator.pop(context);
+    }
+  }
+
+  // 辅助方法：格式化云端时间戳
+  String _formatDate(Timestamp? timestamp) {
+    if (timestamp == null) return '时间获取中...';
+    final DateTime date = timestamp.toDate();
+    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')} ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+  }
 
   @override
   Widget build(BuildContext context) {
     final primaryColor = Theme.of(context).colorScheme.primary;
+
+    if (user == null) {
+      return const Scaffold(body: Center(child: Text("请先登录！")));
+    }
 
     return Scaffold(
       backgroundColor: Colors.grey[50],
@@ -55,55 +91,70 @@ class _WalletPageState extends State<WalletPage> {
       ),
       body: Column(
         children: [
-          // 💳 顶部大金额卡片
-          Container(
-            width: double.infinity,
-            margin: const EdgeInsets.all(20),
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [primaryColor, const Color(0xFFFF8E4D)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(24),
-              boxShadow: [
-                BoxShadow(
-                  color: primaryColor.withValues(alpha: 0.3),
-                  blurRadius: 20,
-                  offset: const Offset(0, 10),
-                ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  '可用余额 (RM)',
-                  style: TextStyle(color: Colors.white70, fontSize: 14),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  _availableBalance.toStringAsFixed(2),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 40,
-                    fontWeight: FontWeight.bold,
+          // ==========================================
+          // 💳 第一只云端眼睛：监听用户余额
+          // ==========================================
+          StreamBuilder<DocumentSnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('users')
+                .doc(user!.uid)
+                .snapshots(),
+            builder: (context, snapshot) {
+              double availableBalance = 0.00;
+
+              if (snapshot.hasData && snapshot.data!.exists) {
+                final data = snapshot.data!.data() as Map<String, dynamic>?;
+                // 如果数据库里还没有 wallet_balance 字段，当做 0 处理
+                availableBalance = (data?['wallet_balance'] ?? 0.0).toDouble();
+              }
+
+              return Container(
+                width: double.infinity,
+                margin: const EdgeInsets.all(20),
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [primaryColor, const Color(0xFFFF8E4D)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                   ),
-                ),
-                const SizedBox(height: 20),
-                Row(
-                  children: [
-                    _buildBalanceInfo(
-                      '托管中',
-                      'RM ${_escrowBalance.toStringAsFixed(2)}',
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [
+                    BoxShadow(
+                      color: primaryColor.withValues(alpha: 0.3),
+                      blurRadius: 20,
+                      offset: const Offset(0, 10),
                     ),
-                    const SizedBox(width: 40),
-                    _buildBalanceInfo('本月收入', 'RM 245.00'),
                   ],
                 ),
-              ],
-            ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      '可用余额 (RM)',
+                      style: TextStyle(color: Colors.white70, fontSize: 14),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      availableBalance.toStringAsFixed(2),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 40,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    Row(
+                      children: [
+                        _buildBalanceInfo('托管中 (即将上线)', 'RM 0.00'),
+                        const SizedBox(width: 40),
+                        _buildBalanceInfo('本月收入', 'RM 0.00'),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            },
           ),
 
           // ⚡ 快捷操作区
@@ -114,19 +165,18 @@ class _WalletPageState extends State<WalletPage> {
                 Expanded(
                   child: _buildActionBtn(
                     Icons.account_balance_wallet,
-                    '充值',
+                    '测试充值',
                     Colors.blue,
-                    () {},
+                    _simulateTopUp, // 👈 接入充值测试电线
                   ),
                 ),
                 const SizedBox(width: 15),
                 Expanded(
-                  child: _buildActionBtn(
-                    Icons.payments,
-                    '提现',
-                    Colors.green,
-                    () {},
-                  ),
+                  child: _buildActionBtn(Icons.payments, '提现', Colors.grey, () {
+                    ScaffoldMessenger.of(
+                      context,
+                    ).showSnackBar(const SnackBar(content: Text('提现功能开发中...')));
+                  }),
                 ),
               ],
             ),
@@ -134,7 +184,9 @@ class _WalletPageState extends State<WalletPage> {
 
           const SizedBox(height: 30),
 
-          // 📜 交易明细列表
+          // ==========================================
+          // 📜 第二只云端眼睛：监听流水明细
+          // ==========================================
           Expanded(
             child: Container(
               width: double.infinity,
@@ -156,62 +208,97 @@ class _WalletPageState extends State<WalletPage> {
                     ),
                   ),
                   Expanded(
-                    child: ListView.builder(
-                      itemCount: _transactions.length,
-                      itemBuilder: (context, index) {
-                        final tx = _transactions[index];
-                        final isIncome = tx['amount'] > 0;
-                        return ListTile(
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 24,
-                            vertical: 8,
-                          ),
-                          leading: CircleAvatar(
-                            backgroundColor: isIncome
-                                ? Colors.orange[50]
-                                : Colors.red[50],
-                            child: Icon(
-                              isIncome
-                                  ? Icons.add_rounded
-                                  : Icons.remove_rounded,
-                              color: isIncome ? Colors.orange : Colors.red,
+                    child: StreamBuilder<QuerySnapshot>(
+                      // 实时拉取属于我的交易记录，并按时间倒序排列
+                      stream: FirebaseFirestore.instance
+                          .collection('transactions')
+                          .where('userId', isEqualTo: user!.uid)
+                          .orderBy('createdAt', descending: true)
+                          .snapshots(),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState ==
+                            ConnectionState.waiting) {
+                          return const Center(
+                            child: CircularProgressIndicator(),
+                          );
+                        }
+
+                        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                          return const Center(
+                            child: Text(
+                              '暂无交易记录\n点击上方测试充值试一试！',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(color: Colors.grey),
                             ),
-                          ),
-                          title: Text(
-                            tx['title'],
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 15,
-                            ),
-                          ),
-                          subtitle: Text(
-                            tx['date'],
-                            style: const TextStyle(
-                              color: Colors.grey,
-                              fontSize: 12,
-                            ),
-                          ),
-                          trailing: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Text(
-                                '${isIncome ? "+" : ""}${tx['amount'].toStringAsFixed(2)}',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16,
-                                  color: isIncome ? Colors.black : Colors.red,
+                          );
+                        }
+
+                        final docs = snapshot.data!.docs;
+
+                        return ListView.builder(
+                          itemCount: docs.length,
+                          itemBuilder: (context, index) {
+                            final tx =
+                                docs[index].data() as Map<String, dynamic>;
+                            final double amount = (tx['amount'] ?? 0)
+                                .toDouble();
+                            final bool isIncome = amount > 0;
+
+                            return ListTile(
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 24,
+                                vertical: 8,
+                              ),
+                              leading: CircleAvatar(
+                                backgroundColor: isIncome
+                                    ? Colors.orange[50]
+                                    : Colors.red[50],
+                                child: Icon(
+                                  isIncome
+                                      ? Icons.add_rounded
+                                      : Icons.remove_rounded,
+                                  color: isIncome ? Colors.orange : Colors.red,
                                 ),
                               ),
-                              Text(
-                                tx['status'],
+                              title: Text(
+                                tx['title'] ?? '未知交易',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 15,
+                                ),
+                              ),
+                              subtitle: Text(
+                                _formatDate(tx['createdAt'] as Timestamp?),
                                 style: const TextStyle(
                                   color: Colors.grey,
-                                  fontSize: 11,
+                                  fontSize: 12,
                                 ),
                               ),
-                            ],
-                          ),
+                              trailing: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Text(
+                                    '${isIncome ? "+" : ""}${amount.toStringAsFixed(2)}',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                      color: isIncome
+                                          ? Colors.black
+                                          : Colors.red,
+                                    ),
+                                  ),
+                                  Text(
+                                    tx['status'] ?? '已处理',
+                                    style: const TextStyle(
+                                      color: Colors.grey,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
                         );
                       },
                     ),

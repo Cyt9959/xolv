@@ -52,6 +52,7 @@ class DefaultFirebaseOptions {
     appId: '1:22819687623:ios:45e5523d5d1e6bf60ac2e2',
     messagingSenderId: '22819687623',
     projectId: 'xolv-43caf',
+    databaseURL: 'https://xolv-43caf-default-rtdb.asia-southeast1.firebasedatabase.app',
     storageBucket: 'xolv-43caf.firebasestorage.app',
     androidClientId: '22819687623-lk7e0mn8crs20s4ge0libn3vn0kf40j4.apps.googleusercontent.com',
     iosClientId: '22819687623-09q4dg4ollj21mcaej0eastdl3bhqg9m.apps.googleusercontent.com',
