@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'kyc_page.dart'; // 引入信任中心
+import 'kyc_page.dart';
 
 class TaskDetailPage extends StatefulWidget {
   final String taskId;
@@ -20,14 +20,13 @@ class TaskDetailPage extends StatefulWidget {
 class _TaskDetailPageState extends State<TaskDetailPage> {
   bool _isApplying = false;
 
-  // ⚡ 核心功能：带 KYC 拦截器与防刷单的接单逻辑
   Future<void> _applyForTask() async {
     setState(() => _isApplying = true);
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) throw Exception('未登录');
 
-      // 🚨 第 0 步：防刷单机制！雇主绝对不能接自己的单！
+      // 🚨 第 0 步：防刷单机制
       final String publisherId = widget.taskData['publisherId'] ?? '';
       if (publisherId == user.uid) {
         _showErrorDialog('老板，您不能接自己发布的悬赏哦！');
@@ -35,31 +34,53 @@ class _TaskDetailPageState extends State<TaskDetailPage> {
         return;
       }
 
-      // 🚨 第 1 步：查档！(修复了极其致命的下划线 Bug)
+      // 🚨 第 1 步：轨道 A 扫描 users 总表
       final userDoc = await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
           .get();
+      String kycStatus = (userDoc.data()?['kyc_status'] ?? 'none')
+          .toString()
+          .trim()
+          .toLowerCase();
 
-      // ⚠️ 重点：数据库里存的是 kyc_status！
-      final kycStatus = userDoc.data()?['kyc_status'] ?? 'none';
+      // 🚀 核心升级：如果总表卡住，立刻用轨道 B 扫描申请表做二次核验！
+      if (kycStatus != 'approved') {
+        final kycAppDoc = await FirebaseFirestore.instance
+            .collection('kyc_applications')
+            .doc(user.uid)
+            .get();
+        if (kycAppDoc.exists) {
+          final appStatus = (kycAppDoc.data()?['status'] ?? 'none')
+              .toString()
+              .trim()
+              .toLowerCase();
+          if (appStatus == 'approved') {
+            kycStatus = 'approved'; // 强行拉回绿灯状态！
+          } else if (appStatus == 'pending' && kycStatus == 'none') {
+            kycStatus = 'pending';
+          } else if (appStatus == 'rejected' && kycStatus == 'none') {
+            kycStatus = 'rejected';
+          }
+        }
+      }
 
-      // 🛡️ 第 2 步：智能拦截！
+      // 🛡️ 第 2 步：智能拦截
       if (kycStatus == 'none' || kycStatus == 'unverified') {
         _showKYCDialog('【平台安全合规】\n为了保障雇主资金安全，接单前必须完成大马卡实名建档！', true);
         setState(() => _isApplying = false);
-        return; // 🛑 拦截
+        return;
       } else if (kycStatus == 'pending') {
         _showKYCDialog('【审核中】\n您的实名资料正在人工审核中，通过后即可抢单！', false);
         setState(() => _isApplying = false);
-        return; // 🛑 拦截
+        return;
       } else if (kycStatus == 'rejected') {
         _showKYCDialog('【认证失败】\n您的实名资料不符合要求，请重新拍摄清晰的证件。', true);
         setState(() => _isApplying = false);
-        return; // 🛑 拦截
+        return;
       }
 
-      // 🚨 第 2.5 步：防重复投递机制 (查云端是否已经投过简历了)
+      // 🚨 第 2.5 步：防重复投递
       final existingApp = await FirebaseFirestore.instance
           .collection('task_applications')
           .where('taskId', isEqualTo: widget.taskId)
@@ -69,10 +90,10 @@ class _TaskDetailPageState extends State<TaskDetailPage> {
       if (existingApp.docs.isNotEmpty) {
         _showErrorDialog('您已经申请过这个任务啦，请耐心等待雇主审核录用！');
         setState(() => _isApplying = false);
-        return; // 🛑 拦截
+        return;
       }
 
-      // ✅ 第 3 步：身份核验全绿灯，正式提交接单申请！
+      // ✅ 第 3 步：放行接单！
       await FirebaseFirestore.instance.collection('task_applications').add({
         'taskId': widget.taskId,
         'applicantId': user.uid,
@@ -88,7 +109,7 @@ class _TaskDetailPageState extends State<TaskDetailPage> {
             backgroundColor: Colors.green,
           ),
         );
-        Navigator.pop(context); // 退回广场
+        Navigator.pop(context);
       }
     } catch (e) {
       if (mounted) {
@@ -101,7 +122,6 @@ class _TaskDetailPageState extends State<TaskDetailPage> {
     }
   }
 
-  // 🛑 通用错误提示弹窗
   void _showErrorDialog(String message) {
     showDialog(
       context: context,
@@ -128,7 +148,6 @@ class _TaskDetailPageState extends State<TaskDetailPage> {
     );
   }
 
-  // 🛑 KYC 专属拦截弹窗 UI
   void _showKYCDialog(String message, bool showGoToKYC) {
     final primaryColor = Theme.of(context).colorScheme.primary;
     showDialog(
@@ -157,11 +176,11 @@ class _TaskDetailPageState extends State<TaskDetailPage> {
           if (showGoToKYC)
             ElevatedButton(
               onPressed: () {
-                Navigator.pop(context); // 关掉弹窗
+                Navigator.pop(context);
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const KYCPage()),
-                ); // 强制押送去认证中心！
+                );
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.green,
@@ -198,18 +217,17 @@ class _TaskDetailPageState extends State<TaskDetailPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 💰 赏金卡片
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [primaryColor, primaryColor.withValues(alpha: 0.8)],
+                  colors: [primaryColor, primaryColor.withOpacity(0.8)],
                 ),
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(
-                    color: primaryColor.withValues(alpha: 0.3),
+                    color: primaryColor.withOpacity(0.3),
                     blurRadius: 10,
                     offset: const Offset(0, 5),
                   ),
@@ -234,7 +252,6 @@ class _TaskDetailPageState extends State<TaskDetailPage> {
               ),
             ),
             const SizedBox(height: 24),
-            // 📝 任务描述
             const Text(
               '任务内容',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
@@ -249,7 +266,6 @@ class _TaskDetailPageState extends State<TaskDetailPage> {
               ),
             ),
             const SizedBox(height: 24),
-            // 📍 任务信息
             const Divider(),
             const SizedBox(height: 16),
             _buildInfoRow(Icons.timer, '期望完成时间', data['expectedTime'] ?? '尽快'),
@@ -262,7 +278,6 @@ class _TaskDetailPageState extends State<TaskDetailPage> {
           ],
         ),
       ),
-      // 🚀 底部接单按钮
       bottomNavigationBar: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16.0),

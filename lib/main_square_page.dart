@@ -10,7 +10,7 @@ import 'review_applications_page.dart';
 import 'task_chat_page.dart';
 import 'wallet_page.dart';
 import 'kyc_page.dart';
-import 'screens/kyc_review_page.dart'; // 👑 引入老板审核大厅
+import 'screens/kyc_review_page.dart';
 
 class MainSquarePage extends StatefulWidget {
   const MainSquarePage({super.key});
@@ -32,7 +32,6 @@ class _MainSquarePageState extends State<MainSquarePage> {
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         onTap: (index) async {
-          // 👈 核心升级：变成异步雷达，用来查云端身份
           if (index == 1) {
             final user = FirebaseAuth.instance.currentUser;
             if (user == null) {
@@ -42,7 +41,7 @@ class _MainSquarePageState extends State<MainSquarePage> {
               return;
             }
 
-            // ⚡ 1. 弹出安检扫描圈，防止用户狂点
+            // ⚡ 1. 弹出安检扫描圈
             showDialog(
               context: context,
               barrierDismissible: false,
@@ -50,18 +49,43 @@ class _MainSquarePageState extends State<MainSquarePage> {
             );
 
             try {
-              // ⚡ 2. 去云端调取该用户的档案，查看 kyc_status
-              final doc = await FirebaseFirestore.instance
+              // ⚡ 2. 轨道 A：查 users 总表
+              final userDoc = await FirebaseFirestore.instance
                   .collection('users')
                   .doc(user.uid)
                   .get();
+              String kycStatus = (userDoc.data()?['kyc_status'] ?? 'none')
+                  .toString()
+                  .trim()
+                  .toLowerCase();
+
+              // 🚀 核心升级：如果总表没有通过，立刻启动轨道 B 深度扫描申请表！
+              if (kycStatus != 'approved') {
+                final kycAppDoc = await FirebaseFirestore.instance
+                    .collection('kyc_applications')
+                    .doc(user.uid)
+                    .get();
+                if (kycAppDoc.exists) {
+                  final appStatus = (kycAppDoc.data()?['status'] ?? 'none')
+                      .toString()
+                      .trim()
+                      .toLowerCase();
+                  if (appStatus == 'approved') {
+                    kycStatus = 'approved'; // 备份雷达确认通过，强行修正状态！
+                  } else if (appStatus == 'pending' && kycStatus == 'none') {
+                    kycStatus = 'pending';
+                  } else if (appStatus == 'rejected' && kycStatus == 'none') {
+                    kycStatus = 'rejected';
+                  }
+                }
+              }
+
               if (context.mounted) Navigator.pop(context); // 关掉扫描圈
 
-              final kycStatus = doc.data()?['kyc_status'] ?? 'none';
+              print('CTO 最终决策状态 >>> $kycStatus');
 
-              // ⚡ 3. 终极审判逻辑
+              // ⚡ 3. 终极审判
               if (kycStatus == 'approved') {
-                // ✅ 绿灯：放行进入发布页面
                 if (context.mounted) {
                   Navigator.push(
                     context,
@@ -69,7 +93,6 @@ class _MainSquarePageState extends State<MainSquarePage> {
                   );
                 }
               } else {
-                // ❌ 红灯：拦截并引导去认证
                 if (context.mounted) {
                   showDialog(
                     context: context,
@@ -83,16 +106,15 @@ class _MainSquarePageState extends State<MainSquarePage> {
                           SizedBox(width: 8),
                           Text(
                             '安全拦截',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 18,
-                            ),
+                            style: TextStyle(fontWeight: FontWeight.bold),
                           ),
                         ],
                       ),
-                      content: const Text(
-                        '老板，为了保障全网用户的资金与交易安全，您目前还未通过实名认证（或仍在审核中）。\n\n必须认证通过后，才能发布悬赏委托哦！',
-                        style: TextStyle(height: 1.5),
+                      content: Text(
+                        kycStatus == 'pending'
+                            ? '老板，您的实名资料正在人工审核中。\n\n请耐心等待通过后即可发布任务！'
+                            : '老板，为了保障全网用户的交易安全，您必须通过实名认证才能发布任务哦！',
+                        style: const TextStyle(height: 1.5),
                       ),
                       actions: [
                         TextButton(
@@ -106,18 +128,15 @@ class _MainSquarePageState extends State<MainSquarePage> {
                           style: ElevatedButton.styleFrom(
                             backgroundColor: primaryColor,
                             foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
                           ),
                           onPressed: () {
-                            Navigator.pop(ctx); // 关闭弹窗
+                            Navigator.pop(ctx);
                             Navigator.push(
                               context,
                               MaterialPageRoute(
                                 builder: (_) => const KYCPage(),
                               ),
-                            ); // 直接保送到认证中心
+                            );
                           },
                           child: const Text(
                             '立即去认证',
@@ -131,7 +150,7 @@ class _MainSquarePageState extends State<MainSquarePage> {
               }
             } catch (e) {
               if (context.mounted) {
-                Navigator.pop(context); // 发生错误也要关掉圈圈
+                Navigator.pop(context);
                 ScaffoldMessenger.of(
                   context,
                 ).showSnackBar(SnackBar(content: Text('网络验证失败: $e')));
@@ -160,9 +179,7 @@ class _MainSquarePageState extends State<MainSquarePage> {
   }
 }
 
-// ------------------------------------------------------------
-// 📺 广场视图
-// ------------------------------------------------------------
+// _HomeView 和 _ProfileView 保持不变...
 class _HomeView extends StatefulWidget {
   const _HomeView();
   @override
@@ -216,7 +233,7 @@ class _HomeViewState extends State<_HomeView> {
               color: Colors.white,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.04),
+                  color: Colors.black.withOpacity(0.04),
                   offset: const Offset(0, 3),
                   blurRadius: 8,
                 ),
@@ -301,9 +318,8 @@ class _HomeViewState extends State<_HomeView> {
                   }
                   if (_maxDistanceFilter < 11.0 &&
                       (distanceInKm == -1.0 ||
-                          distanceInKm > _maxDistanceFilter)) {
+                          distanceInKm > _maxDistanceFilter))
                     continue;
-                  }
 
                   data['id'] = doc.id;
                   data['computedDistance'] = distanceInKm;
@@ -381,9 +397,7 @@ class _HomeViewState extends State<_HomeView> {
                                       vertical: 4,
                                     ),
                                     decoration: BoxDecoration(
-                                      color: primaryColor.withValues(
-                                        alpha: 0.1,
-                                      ),
+                                      color: primaryColor.withOpacity(0.1),
                                       borderRadius: BorderRadius.circular(12),
                                     ),
                                     child: Row(
@@ -467,9 +481,6 @@ class _HomeViewState extends State<_HomeView> {
   }
 }
 
-// ------------------------------------------------------------
-// 👤 个人大厅
-// ------------------------------------------------------------
 class _ProfileView extends StatelessWidget {
   const _ProfileView();
   @override
@@ -507,7 +518,7 @@ class _ProfileView extends StatelessWidget {
                 children: [
                   CircleAvatar(
                     radius: 40,
-                    backgroundColor: primaryColor.withValues(alpha: 0.1),
+                    backgroundColor: primaryColor.withOpacity(0.1),
                     backgroundImage: user?.photoURL != null
                         ? NetworkImage(user!.photoURL!)
                         : null,
@@ -535,7 +546,7 @@ class _ProfileView extends StatelessWidget {
                               .snapshots(),
                           builder: (context, snapshot) {
                             if (!snapshot.hasData ||
-                                snapshot.data!.docs.isEmpty) {
+                                snapshot.data!.docs.isEmpty)
                               return const Text(
                                 '⭐ 暂无评价',
                                 style: TextStyle(
@@ -544,15 +555,13 @@ class _ProfileView extends StatelessWidget {
                                   fontWeight: FontWeight.bold,
                                 ),
                               );
-                            }
                             final docs = snapshot.data!.docs;
                             double totalStars = 0;
-                            for (var doc in docs) {
+                            for (var doc in docs)
                               totalStars +=
                                   (doc.data()
                                       as Map<String, dynamic>)['rating'] ??
                                   5.0;
-                            }
                             double avgRating = totalStars / docs.length;
                             return Row(
                               children: [
@@ -598,8 +607,6 @@ class _ProfileView extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 16),
-
-                        // 💰 云端钱包按钮
                         if (user != null)
                           StreamBuilder<DocumentSnapshot>(
                             stream: FirebaseFirestore.instance
@@ -615,7 +622,6 @@ class _ProfileView extends StatelessWidget {
                                 balance = (data?['wallet_balance'] ?? 0.0)
                                     .toDouble();
                               }
-
                               return InkWell(
                                 onTap: () => Navigator.push(
                                   context,
@@ -632,15 +638,13 @@ class _ProfileView extends StatelessWidget {
                                     gradient: LinearGradient(
                                       colors: [
                                         primaryColor,
-                                        primaryColor.withValues(alpha: 0.8),
+                                        primaryColor.withOpacity(0.8),
                                       ],
                                     ),
                                     borderRadius: BorderRadius.circular(12),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: primaryColor.withValues(
-                                          alpha: 0.2,
-                                        ),
+                                        color: primaryColor.withOpacity(0.2),
                                         blurRadius: 8,
                                         offset: const Offset(0, 4),
                                       ),
@@ -675,10 +679,7 @@ class _ProfileView extends StatelessWidget {
                               );
                             },
                           ),
-
                         const SizedBox(height: 12),
-
-                        // 🛡️ 云端实名认证按钮
                         if (user != null)
                           StreamBuilder<DocumentSnapshot>(
                             stream: FirebaseFirestore.instance
@@ -687,22 +688,14 @@ class _ProfileView extends StatelessWidget {
                                 .snapshots(),
                             builder: (context, snapshot) {
                               if (snapshot.connectionState ==
-                                  ConnectionState.waiting) {
-                                return const Padding(
-                                  padding: EdgeInsets.symmetric(
-                                    vertical: 8.0,
-                                    horizontal: 16.0,
-                                  ),
-                                  child: SizedBox(
-                                    height: 16,
-                                    width: 16,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
+                                  ConnectionState.waiting)
+                                return const SizedBox(
+                                  height: 16,
+                                  width: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
                                   ),
                                 );
-                              }
-
                               String status = 'none';
                               if (snapshot.hasData && snapshot.data!.exists) {
                                 final data =
@@ -710,13 +703,19 @@ class _ProfileView extends StatelessWidget {
                                         as Map<String, dynamic>?;
                                 status = data?['status'] ?? 'none';
                               }
+                              status = status.toString().trim().toLowerCase();
 
-                              Color bgColor;
-                              Color borderColor;
-                              Color textColor;
-                              String text;
-                              IconData icon;
-                              VoidCallback? onTap;
+                              Color bgColor = Colors.green[50]!;
+                              Color borderColor = Colors.green[200]!;
+                              Color textColor = Colors.green;
+                              String text = '去完成实名认证';
+                              IconData icon = Icons.verified_user;
+                              VoidCallback? onTap = () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const KYCPage(),
+                                ),
+                              );
 
                               if (status == 'pending') {
                                 bgColor = Colors.orange[50]!;
@@ -738,24 +737,6 @@ class _ProfileView extends StatelessWidget {
                                 textColor = Colors.red[800]!;
                                 text = '认证被驳回，请重试';
                                 icon = Icons.error_outline;
-                                onTap = () => Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => const KYCPage(),
-                                  ),
-                                );
-                              } else {
-                                bgColor = Colors.green[50]!;
-                                borderColor = Colors.green[200]!;
-                                textColor = Colors.green;
-                                text = '去完成实名认证';
-                                icon = Icons.verified_user;
-                                onTap = () => Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => const KYCPage(),
-                                  ),
-                                );
                               }
 
                               return InkWell(
@@ -784,24 +765,18 @@ class _ProfileView extends StatelessWidget {
                                           fontSize: 12,
                                         ),
                                       ),
-                                      if (onTap != null) ...[
-                                        const SizedBox(width: 4),
-                                        Icon(
+                                      if (onTap != null)
+                                        const Icon(
                                           Icons.chevron_right,
-                                          color: textColor,
                                           size: 14,
                                         ),
-                                      ],
                                     ],
                                   ),
                                 ),
                               );
                             },
                           ),
-
                         const SizedBox(height: 12),
-
-                        // 👑 老板专属秘密审核台入口
                         if (user != null && user.email == 'chuitheen@gmail.com')
                           InkWell(
                             onTap: () => Navigator.push(
@@ -877,9 +852,7 @@ class _ProfileView extends StatelessWidget {
   }
 }
 
-// ------------------------------------------------------------
-// 💼 我的委托 (雇主视角)
-// ------------------------------------------------------------
+// _MyPostedTasksView 和 _MyAcceptedTasksView 保持原样...
 class _MyPostedTasksView extends StatelessWidget {
   final String currentUid;
   const _MyPostedTasksView({required this.currentUid});
@@ -925,8 +898,9 @@ class _MyPostedTasksView extends StatelessWidget {
                   const SizedBox(height: 24),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
-                    children: List.generate(5, (index) {
-                      return IconButton(
+                    children: List.generate(
+                      5,
+                      (index) => IconButton(
                         icon: Icon(
                           index < currentRating
                               ? Icons.star
@@ -936,8 +910,8 @@ class _MyPostedTasksView extends StatelessWidget {
                         ),
                         onPressed: () =>
                             setState(() => currentRating = index + 1),
-                      );
-                    }),
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 24),
                   ElevatedButton(
@@ -991,17 +965,14 @@ class _MyPostedTasksView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final primaryColor = Theme.of(context).colorScheme.primary;
-
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('tasks')
           .where('publisherId', isEqualTo: currentUid)
           .snapshots(),
       builder: (context, snapshot) {
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty)
           return const Center(child: Text('暂无发布'));
-        }
-
         return ListView(
           padding: const EdgeInsets.all(16),
           children: snapshot.data!.docs.map((doc) {
@@ -1013,7 +984,6 @@ class _MyPostedTasksView extends StatelessWidget {
 
             String statusText = '等待接单';
             Color statusColor = Colors.orange;
-
             if (rawStatus == 'in_progress') {
               statusText = '进行中';
               statusColor = primaryColor;
@@ -1076,7 +1046,6 @@ class _MyPostedTasksView extends StatelessWidget {
                             )
                           : null,
                     ),
-
                     if (acceptedCount > 0 && rawStatus != 'completed')
                       Padding(
                         padding: const EdgeInsets.only(
@@ -1139,7 +1108,6 @@ class _MyPostedTasksView extends StatelessWidget {
                           ],
                         ),
                       ),
-
                     if (rawStatus == 'pending')
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16.0),
@@ -1179,9 +1147,6 @@ class _MyPostedTasksView extends StatelessWidget {
   }
 }
 
-// ------------------------------------------------------------
-// 🏃‍♂️ 我的任务 (接单人视角)
-// ------------------------------------------------------------
 class _MyAcceptedTasksView extends StatelessWidget {
   final String currentUid;
   const _MyAcceptedTasksView({required this.currentUid});
@@ -1189,17 +1154,14 @@ class _MyAcceptedTasksView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final primaryColor = Theme.of(context).colorScheme.primary;
-
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('tasks')
           .where('acceptedUsers', arrayContains: currentUid)
           .snapshots(),
       builder: (context, snapshot) {
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty)
           return const Center(child: Text('暂无接单'));
-        }
-
         return ListView(
           padding: const EdgeInsets.all(16),
           children: snapshot.data!.docs.map((doc) {
@@ -1213,13 +1175,13 @@ class _MyAcceptedTasksView extends StatelessWidget {
               elevation: 0,
               color: isCompleted
                   ? Colors.grey[50]
-                  : primaryColor.withValues(alpha: 0.08),
+                  : primaryColor.withOpacity(0.08),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
                 side: BorderSide(
                   color: isCompleted
                       ? Colors.black12
-                      : primaryColor.withValues(alpha: 0.3),
+                      : primaryColor.withOpacity(0.3),
                 ),
               ),
               child: Padding(
