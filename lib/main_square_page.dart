@@ -233,7 +233,7 @@ class _HomeViewState extends State<_HomeView> {
               color: Colors.white,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.04),
+                  color: Colors.black.withValues(alpha: 0.04),
                   offset: const Offset(0, 3),
                   blurRadius: 8,
                 ),
@@ -318,8 +318,9 @@ class _HomeViewState extends State<_HomeView> {
                   }
                   if (_maxDistanceFilter < 11.0 &&
                       (distanceInKm == -1.0 ||
-                          distanceInKm > _maxDistanceFilter))
+                          distanceInKm > _maxDistanceFilter)) {
                     continue;
+                  }
 
                   data['id'] = doc.id;
                   data['computedDistance'] = distanceInKm;
@@ -397,7 +398,9 @@ class _HomeViewState extends State<_HomeView> {
                                       vertical: 4,
                                     ),
                                     decoration: BoxDecoration(
-                                      color: primaryColor.withOpacity(0.1),
+                                      color: primaryColor.withValues(
+                                        alpha: 0.1,
+                                      ),
                                       borderRadius: BorderRadius.circular(12),
                                     ),
                                     child: Row(
@@ -518,7 +521,7 @@ class _ProfileView extends StatelessWidget {
                 children: [
                   CircleAvatar(
                     radius: 40,
-                    backgroundColor: primaryColor.withOpacity(0.1),
+                    backgroundColor: primaryColor.withValues(alpha: 0.1),
                     backgroundImage: user?.photoURL != null
                         ? NetworkImage(user!.photoURL!)
                         : null,
@@ -546,7 +549,7 @@ class _ProfileView extends StatelessWidget {
                               .snapshots(),
                           builder: (context, snapshot) {
                             if (!snapshot.hasData ||
-                                snapshot.data!.docs.isEmpty)
+                                snapshot.data!.docs.isEmpty) {
                               return const Text(
                                 '⭐ 暂无评价',
                                 style: TextStyle(
@@ -555,13 +558,15 @@ class _ProfileView extends StatelessWidget {
                                   fontWeight: FontWeight.bold,
                                 ),
                               );
+                            }
                             final docs = snapshot.data!.docs;
                             double totalStars = 0;
-                            for (var doc in docs)
+                            for (var doc in docs) {
                               totalStars +=
                                   (doc.data()
                                       as Map<String, dynamic>)['rating'] ??
                                   5.0;
+                            }
                             double avgRating = totalStars / docs.length;
                             return Row(
                               children: [
@@ -638,13 +643,15 @@ class _ProfileView extends StatelessWidget {
                                     gradient: LinearGradient(
                                       colors: [
                                         primaryColor,
-                                        primaryColor.withOpacity(0.8),
+                                        primaryColor.withValues(alpha: 0.8),
                                       ],
                                     ),
                                     borderRadius: BorderRadius.circular(12),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: primaryColor.withOpacity(0.2),
+                                        color: primaryColor.withValues(
+                                          alpha: 0.2,
+                                        ),
                                         blurRadius: 8,
                                         offset: const Offset(0, 4),
                                       ),
@@ -688,7 +695,7 @@ class _ProfileView extends StatelessWidget {
                                 .snapshots(),
                             builder: (context, snapshot) {
                               if (snapshot.connectionState ==
-                                  ConnectionState.waiting)
+                                  ConnectionState.waiting) {
                                 return const SizedBox(
                                   height: 16,
                                   width: 16,
@@ -696,6 +703,7 @@ class _ProfileView extends StatelessWidget {
                                     strokeWidth: 2,
                                   ),
                                 );
+                              }
                               String status = 'none';
                               if (snapshot.hasData && snapshot.data!.exists) {
                                 final data =
@@ -971,8 +979,9 @@ class _MyPostedTasksView extends StatelessWidget {
           .where('publisherId', isEqualTo: currentUid)
           .snapshots(),
       builder: (context, snapshot) {
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty)
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
           return const Center(child: Text('暂无发布'));
+        }
         return ListView(
           padding: const EdgeInsets.all(16),
           children: snapshot.data!.docs.map((doc) {
@@ -1160,8 +1169,9 @@ class _MyAcceptedTasksView extends StatelessWidget {
           .where('acceptedUsers', arrayContains: currentUid)
           .snapshots(),
       builder: (context, snapshot) {
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty)
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
           return const Center(child: Text('暂无接单'));
+        }
         return ListView(
           padding: const EdgeInsets.all(16),
           children: snapshot.data!.docs.map((doc) {
@@ -1175,13 +1185,13 @@ class _MyAcceptedTasksView extends StatelessWidget {
               elevation: 0,
               color: isCompleted
                   ? Colors.grey[50]
-                  : primaryColor.withOpacity(0.08),
+                  : primaryColor.withValues(alpha: 0.08),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
                 side: BorderSide(
                   color: isCompleted
                       ? Colors.black12
-                      : primaryColor.withOpacity(0.3),
+                      : primaryColor.withValues(alpha: 0.3),
                 ),
               ),
               child: Padding(
