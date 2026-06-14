@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:geolocator/geolocator.dart';
-import 'edit_profile_page.dart';
+import 'package:share_plus/share_plus.dart';
 import 'publish_task_page.dart';
 import 'settings_page.dart';
 import 'task_detail_page.dart';
@@ -59,7 +60,7 @@ class _MainSquarePageState extends State<MainSquarePage> {
                   .trim()
                   .toLowerCase();
 
-              // 🚀 核心升级：如果总表没有通过，立刻启动轨道 B 深度扫描申请表！
+              // 🚀 轨道 B：深度扫描申请表做二次核验
               if (kycStatus != 'approved') {
                 final kycAppDoc = await FirebaseFirestore.instance
                     .collection('kyc_applications')
@@ -71,7 +72,7 @@ class _MainSquarePageState extends State<MainSquarePage> {
                       .trim()
                       .toLowerCase();
                   if (appStatus == 'approved') {
-                    kycStatus = 'approved'; // 备份雷达确认通过，强行修正状态！
+                    kycStatus = 'approved';
                   } else if (appStatus == 'pending' && kycStatus == 'none') {
                     kycStatus = 'pending';
                   } else if (appStatus == 'rejected' && kycStatus == 'none') {
@@ -81,8 +82,6 @@ class _MainSquarePageState extends State<MainSquarePage> {
               }
 
               if (context.mounted) Navigator.pop(context); // 关掉扫描圈
-
-              print('CTO 最终决策状态 >>> $kycStatus');
 
               // ⚡ 3. 终极审判
               if (kycStatus == 'approved') {
@@ -179,7 +178,9 @@ class _MainSquarePageState extends State<MainSquarePage> {
   }
 }
 
-// _HomeView 和 _ProfileView 保持不变...
+// ------------------------------------------------------------
+// 📺 广场视图
+// ------------------------------------------------------------
 class _HomeView extends StatefulWidget {
   const _HomeView();
   @override
@@ -194,6 +195,29 @@ class _HomeViewState extends State<_HomeView> {
   void initState() {
     super.initState();
     _fetchTakerLocation();
+  }
+
+  // ========================================
+  // 📲 一键分享任务（原生分享菜单）
+  // ========================================
+  Future<void> _shareTask(Map<String, dynamic> data) async {
+    final String taskId = data['id'];
+    final String shareText =
+        '''
+📢 【XOLV 悬赏任务】
+
+📝 ${data['description']}
+📍 ${data['location']}
+💰 悬赏金额：RM ${data['amount']}
+⏰ 完成时限：${data['expectedTime']}
+
+👇 点击直接查看任务：
+https://cytxolv.com/task/$taskId
+
+快来 XOLV 接单赚钱！💪
+''';
+
+    await Share.share(shareText, subject: 'XOLV 悬赏任务');
   }
 
   Future<void> _fetchTakerLocation() async {
@@ -301,18 +325,15 @@ class _HomeViewState extends State<_HomeView> {
                   final data = doc.data() as Map<String, dynamic>;
                   if (data['status'] != 'pending') continue;
                   double distanceInKm = -1.0;
-                  final double? taskLat = data['latitude'];
-                  final double? taskLng = data['longitude'];
-
                   if (_currentTakerPosition != null &&
-                      taskLat != null &&
-                      taskLng != null) {
+                      data['latitude'] != null &&
+                      data['longitude'] != null) {
                     distanceInKm =
                         Geolocator.distanceBetween(
                           _currentTakerPosition!.latitude,
                           _currentTakerPosition!.longitude,
-                          taskLat,
-                          taskLng,
+                          data['latitude'],
+                          data['longitude'],
                         ) /
                         1000;
                   }
@@ -327,13 +348,10 @@ class _HomeViewState extends State<_HomeView> {
                   sortedFilteredTasks.add(data);
                 }
 
-                sortedFilteredTasks.sort((a, b) {
-                  double distA = a['computedDistance'] ?? double.infinity;
-                  double distB = b['computedDistance'] ?? double.infinity;
-                  if (distA < 0) distA = double.infinity;
-                  if (distB < 0) distB = double.infinity;
-                  return distA.compareTo(distB);
-                });
+                sortedFilteredTasks.sort(
+                  (a, b) => (a['computedDistance'] ?? double.infinity)
+                      .compareTo(b['computedDistance'] ?? double.infinity),
+                );
 
                 if (sortedFilteredTasks.isEmpty) {
                   return const Center(
@@ -357,118 +375,187 @@ class _HomeViewState extends State<_HomeView> {
                               : '${distance.toStringAsFixed(1)} km')
                         : '未知距离';
 
-                    return InkWell(
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => TaskDetailPage(
-                            taskId: data['id'],
-                            taskData: data,
+                    return _StaggeredListItem(
+                      index: index,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(16),
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => TaskDetailPage(
+                              taskId: data['id'],
+                              taskData: data,
+                            ),
                           ),
                         ),
-                      ),
-                      child: Card(
-                        margin: const EdgeInsets.only(bottom: 16),
-                        elevation: 0,
-                        color: Colors.grey[50],
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          side: const BorderSide(color: Colors.black12),
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.all(20),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
+                        child: Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                offset: const Offset(0, 4),
+                                blurRadius: 12,
+                                color: Colors.black.withValues(alpha: 0.06),
+                              ),
+                            ],
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(16),
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: Colors.grey[50],
+                                border: Border.all(color: Colors.black12),
+                              ),
+                              child: Stack(
                                 children: [
-                                  Text(
-                                    'RM ${data['amount']}',
-                                    style: TextStyle(
-                                      fontSize: 24,
-                                      fontWeight: FontWeight.w900,
-                                      color: primaryColor,
-                                    ),
-                                  ),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 10,
-                                      vertical: 4,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: primaryColor.withValues(
-                                        alpha: 0.1,
-                                      ),
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
+                                  IntrinsicHeight(
                                     child: Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.stretch,
                                       children: [
-                                        Icon(
-                                          Icons.group,
-                                          size: 14,
+                                        // 🟧 左侧橙色装饰竖线
+                                        Container(
+                                          width: 4,
                                           color: primaryColor,
                                         ),
-                                        Text(
-                                          '  ${data['acceptedCount'] ?? 0} / ${data['peopleCount'] ?? 1} 人',
-                                          style: TextStyle(
-                                            color: primaryColor,
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.bold,
+                                        Expanded(
+                                          child: Padding(
+                                            padding: const EdgeInsets.all(20),
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Row(
+                                                  mainAxisAlignment:
+                                                      MainAxisAlignment
+                                                          .spaceBetween,
+                                                  children: [
+                                                    Text(
+                                                      'RM ${data['amount']}',
+                                                      style: TextStyle(
+                                                        fontSize: 28,
+                                                        fontWeight:
+                                                            FontWeight.w900,
+                                                        color: primaryColor,
+                                                      ),
+                                                    ),
+                                                    Container(
+                                                      padding:
+                                                          const EdgeInsets.symmetric(
+                                                            horizontal: 10,
+                                                            vertical: 4,
+                                                          ),
+                                                      decoration: BoxDecoration(
+                                                        color: primaryColor
+                                                            .withValues(
+                                                              alpha: 0.1,
+                                                            ),
+                                                        borderRadius:
+                                                            BorderRadius.circular(
+                                                              12,
+                                                            ),
+                                                      ),
+                                                      child: Row(
+                                                        children: [
+                                                          Icon(
+                                                            Icons.group,
+                                                            size: 14,
+                                                            color: primaryColor,
+                                                          ),
+                                                          Text(
+                                                            '  ${data['acceptedCount'] ?? 0} / ${data['peopleCount'] ?? 1} 人',
+                                                            style: TextStyle(
+                                                              color:
+                                                                  primaryColor,
+                                                              fontSize: 13,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .bold,
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                                const SizedBox(height: 12),
+                                                Text(
+                                                  data['description'] ?? '',
+                                                  style: const TextStyle(
+                                                    fontSize: 16,
+                                                    height: 1.4,
+                                                    color: Colors.black87,
+                                                  ),
+                                                  maxLines: 2,
+                                                ),
+                                                const SizedBox(height: 16),
+                                                Row(
+                                                  children: [
+                                                    Icon(
+                                                      Icons.near_me,
+                                                      size: 14,
+                                                      color: distance >= 0
+                                                          ? primaryColor
+                                                          : Colors.grey,
+                                                    ),
+                                                    Text(
+                                                      ' $distanceText',
+                                                      style: TextStyle(
+                                                        color: distance >= 0
+                                                            ? primaryColor
+                                                            : Colors.grey,
+                                                        fontSize: 13,
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                      ),
+                                                    ),
+                                                    const SizedBox(width: 14),
+                                                    const Icon(
+                                                      Icons.timer_outlined,
+                                                      size: 14,
+                                                      color: Colors.grey,
+                                                    ),
+                                                    Text(
+                                                      ' ${data['expectedTime']}',
+                                                      style: const TextStyle(
+                                                        color: Colors.grey,
+                                                        fontSize: 13,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ],
+                                            ),
                                           ),
                                         ),
                                       ],
                                     ),
                                   ),
-                                ],
-                              ),
-                              const SizedBox(height: 12),
-                              Text(
-                                data['description'] ?? '',
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  height: 1.4,
-                                  color: Colors.black87,
-                                ),
-                                maxLines: 2,
-                              ),
-                              const SizedBox(height: 16),
-                              Row(
-                                children: [
-                                  Icon(
-                                    Icons.near_me,
-                                    size: 14,
-                                    color: distance >= 0
-                                        ? primaryColor
-                                        : Colors.grey,
-                                  ),
-                                  Text(
-                                    ' $distanceText',
-                                    style: TextStyle(
-                                      color: distance >= 0
-                                          ? primaryColor
-                                          : Colors.grey,
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 14),
-                                  const Icon(
-                                    Icons.timer_outlined,
-                                    size: 14,
-                                    color: Colors.grey,
-                                  ),
-                                  Text(
-                                    ' ${data['expectedTime']}',
-                                    style: const TextStyle(
-                                      color: Colors.grey,
-                                      fontSize: 13,
+                                  Positioned(
+                                    bottom: 8,
+                                    right: 8,
+                                    child: Material(
+                                      color: Colors.white,
+                                      shape: const CircleBorder(),
+                                      elevation: 2,
+                                      child: InkWell(
+                                        customBorder: const CircleBorder(),
+                                        onTap: () => _shareTask(data),
+                                        child: const Padding(
+                                          padding: EdgeInsets.all(6),
+                                          child: Icon(
+                                            Icons.share,
+                                            size: 16,
+                                            color: Colors.black54,
+                                          ),
+                                        ),
+                                      ),
                                     ),
                                   ),
                                 ],
                               ),
-                            ],
+                            ),
                           ),
                         ),
                       ),
@@ -484,6 +571,84 @@ class _HomeViewState extends State<_HomeView> {
   }
 }
 
+// ------------------------------------------------------------
+// ✨ 任务卡片错落入场动画：淡入 + 轻微上滑，按 index 错开延迟
+// ------------------------------------------------------------
+class _StaggeredListItem extends StatefulWidget {
+  final int index;
+  final Widget child;
+  const _StaggeredListItem({required this.index, required this.child});
+
+  @override
+  State<_StaggeredListItem> createState() => _StaggeredListItemState();
+}
+
+class _StaggeredListItemState extends State<_StaggeredListItem> {
+  bool _visible = false;
+
+  @override
+  void initState() {
+    super.initState();
+    Future.delayed(Duration(milliseconds: widget.index * 60), () {
+      if (mounted) setState(() => _visible = true);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0.0, end: _visible ? 1.0 : 0.0),
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeOut,
+      builder: (context, value, child) {
+        return Opacity(
+          opacity: value,
+          child: FractionalTranslation(
+            translation: Offset(0, (1 - value) * 0.08),
+            child: child,
+          ),
+        );
+      },
+      child: widget.child,
+    );
+  }
+}
+
+// ------------------------------------------------------------
+// 👆 按钮点击缩放反馈：按下轻微缩小 + 震动反馈
+// ------------------------------------------------------------
+class _TapScaleButton extends StatefulWidget {
+  final Widget child;
+  const _TapScaleButton({required this.child});
+
+  @override
+  State<_TapScaleButton> createState() => _TapScaleButtonState();
+}
+
+class _TapScaleButtonState extends State<_TapScaleButton> {
+  double _scale = 1.0;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: (_) {
+        HapticFeedback.lightImpact();
+        setState(() => _scale = 0.96);
+      },
+      onTapUp: (_) => setState(() => _scale = 1.0),
+      onTapCancel: () => setState(() => _scale = 1.0),
+      child: AnimatedScale(
+        scale: _scale,
+        duration: const Duration(milliseconds: 100),
+        child: widget.child,
+      ),
+    );
+  }
+}
+
+// ------------------------------------------------------------
+// 👤 个人大厅 (全自动档案显示版)
+// ------------------------------------------------------------
 class _ProfileView extends StatelessWidget {
   const _ProfileView();
   @override
@@ -516,122 +681,346 @@ class _ProfileView extends StatelessWidget {
           children: [
             Padding(
               padding: const EdgeInsets.all(24.0),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  CircleAvatar(
-                    radius: 40,
-                    backgroundColor: primaryColor.withValues(alpha: 0.1),
-                    backgroundImage: user?.photoURL != null
-                        ? NetworkImage(user!.photoURL!)
-                        : null,
-                    child: user?.photoURL == null
-                        ? Icon(Icons.person, size: 40, color: primaryColor)
-                        : null,
-                  ),
-                  const SizedBox(width: 20),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          user?.displayName ?? 'XOLV 贵宾',
-                          style: const TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
+              child: StreamBuilder<DocumentSnapshot>(
+                stream: FirebaseFirestore.instance
+                    .collection('kyc_applications')
+                    .doc(user?.uid)
+                    .snapshots(),
+                builder: (context, kycSnapshot) {
+                  String kycStatus = 'none';
+                  if (kycSnapshot.hasData && kycSnapshot.data!.exists) {
+                    kycStatus =
+                        (kycSnapshot.data!.data()
+                                as Map<String, dynamic>?)?['status']
+                            ?.toString()
+                            .trim()
+                            .toLowerCase() ??
+                        'none';
+                  }
+                  bool isVerified = kycStatus == 'approved';
+
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // 📸 头像区 (如果通过认证，边框会发绿光)
+                      Container(
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: isVerified
+                                ? Colors.green
+                                : Colors.transparent,
+                            width: 2,
                           ),
                         ),
-                        const SizedBox(height: 4),
-                        StreamBuilder<QuerySnapshot>(
-                          stream: FirebaseFirestore.instance
-                              .collection('reviews')
-                              .where('targetUserId', isEqualTo: user?.uid)
-                              .snapshots(),
-                          builder: (context, snapshot) {
-                            if (!snapshot.hasData ||
-                                snapshot.data!.docs.isEmpty) {
-                              return const Text(
-                                '⭐ 暂无评价',
+                        child: CircleAvatar(
+                          radius: 40,
+                          backgroundColor: isVerified
+                              ? Colors.green.withValues(alpha: 0.1)
+                              : primaryColor.withValues(alpha: 0.1),
+                          backgroundImage: user?.photoURL != null
+                              ? NetworkImage(user!.photoURL!)
+                              : null,
+                          child: user?.photoURL == null
+                              ? Icon(
+                                  isVerified
+                                      ? Icons.verified_user
+                                      : Icons.person,
+                                  size: 40,
+                                  color: isVerified
+                                      ? Colors.green
+                                      : primaryColor,
+                                )
+                              : null,
+                        ),
+                      ),
+                      const SizedBox(width: 20),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // 🌟 名字与蓝 V 认证区
+                            Row(
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    isVerified
+                                        ? (user?.displayName ?? 'XOLV 实名认证会员')
+                                        : (user?.displayName ?? 'XOLV 访客'),
+                                    style: const TextStyle(
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                if (isVerified) ...[
+                                  const SizedBox(width: 6),
+                                  const Icon(
+                                    Icons.verified,
+                                    color: Colors.blue,
+                                    size: 20,
+                                  ),
+                                ],
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+
+                            // 📜 动态档案状态
+                            if (isVerified)
+                              const Text(
+                                '✅ 已绑定大马卡实名资料',
                                 style: TextStyle(
-                                  color: Colors.grey,
-                                  fontSize: 13,
+                                  color: Colors.green,
+                                  fontSize: 12,
                                   fontWeight: FontWeight.bold,
                                 ),
-                              );
-                            }
-                            final docs = snapshot.data!.docs;
-                            double totalStars = 0;
-                            for (var doc in docs) {
-                              totalStars +=
-                                  (doc.data()
-                                      as Map<String, dynamic>)['rating'] ??
-                                  5.0;
-                            }
-                            double avgRating = totalStars / docs.length;
-                            return Row(
-                              children: [
-                                const Icon(
-                                  Icons.star,
-                                  color: Colors.amber,
-                                  size: 16,
+                              )
+                            else if (kycStatus == 'pending')
+                              const Text(
+                                '⏳ 实名资料审核中，请稍候',
+                                style: TextStyle(
+                                  color: Colors.orange,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
                                 ),
-                                Text(
-                                  ' ${avgRating.toStringAsFixed(1)} ',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 14,
-                                    color: Colors.amber,
-                                  ),
+                              )
+                            else
+                              const Text(
+                                '⚠️ 尚未绑定实名认证',
+                                style: TextStyle(
+                                  color: Colors.redAccent,
+                                  fontSize: 12,
                                 ),
-                                Text(
-                                  '(${docs.length}评价)',
-                                  style: const TextStyle(
-                                    color: Colors.grey,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ],
-                            );
-                          },
-                        ),
-                        const SizedBox(height: 8),
-                        InkWell(
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const EditProfilePage(),
+                              ),
+
+                            const SizedBox(height: 8),
+
+                            // ⭐ 星级评价系统
+                            StreamBuilder<QuerySnapshot>(
+                              stream: FirebaseFirestore.instance
+                                  .collection('reviews')
+                                  .where('targetUserId', isEqualTo: user?.uid)
+                                  .snapshots(),
+                              builder: (context, snapshot) {
+                                if (!snapshot.hasData ||
+                                    snapshot.data!.docs.isEmpty) {
+                                  return const Text(
+                                    '⭐ 暂无评价',
+                                    style: TextStyle(
+                                      color: Colors.grey,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  );
+                                }
+                                final docs = snapshot.data!.docs;
+                                double totalStars = 0;
+                                for (var doc in docs) {
+                                  totalStars +=
+                                      (doc.data()
+                                          as Map<String, dynamic>)['rating'] ??
+                                      5.0;
+                                }
+                                double avgRating = totalStars / docs.length;
+                                return Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.star,
+                                      color: Colors.amber,
+                                      size: 16,
+                                    ),
+                                    Text(
+                                      ' ${avgRating.toStringAsFixed(1)} ',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 14,
+                                        color: Colors.amber,
+                                      ),
+                                    ),
+                                    Text(
+                                      '(${docs.length}评价)',
+                                      style: const TextStyle(
+                                        color: Colors.grey,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
+                                );
+                              },
                             ),
-                          ),
-                          child: Text(
-                            '编辑个人资料 >',
-                            style: TextStyle(
-                              color: primaryColor,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        if (user != null)
-                          StreamBuilder<DocumentSnapshot>(
-                            stream: FirebaseFirestore.instance
-                                .collection('users')
-                                .doc(user.uid)
-                                .snapshots(),
-                            builder: (context, snapshot) {
-                              double balance = 0.00;
-                              if (snapshot.hasData && snapshot.data!.exists) {
-                                final data =
-                                    snapshot.data!.data()
-                                        as Map<String, dynamic>?;
-                                balance = (data?['wallet_balance'] ?? 0.0)
-                                    .toDouble();
-                              }
-                              return InkWell(
+
+                            const SizedBox(height: 16),
+
+                            // 💰 云端钱包按钮
+                            if (user != null)
+                              StreamBuilder<DocumentSnapshot>(
+                                stream: FirebaseFirestore.instance
+                                    .collection('users')
+                                    .doc(user.uid)
+                                    .snapshots(),
+                                builder: (context, snapshot) {
+                                  double balance = 0.00;
+                                  if (snapshot.hasData &&
+                                      snapshot.data!.exists) {
+                                    final data =
+                                        snapshot.data!.data()
+                                            as Map<String, dynamic>?;
+                                    balance = (data?['wallet_balance'] ?? 0.0)
+                                        .toDouble();
+                                  }
+                                  return InkWell(
+                                    onTap: () => Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => const WalletPage(),
+                                      ),
+                                    ),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 14,
+                                        vertical: 10,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        gradient: LinearGradient(
+                                          colors: [
+                                            primaryColor,
+                                            primaryColor.withValues(alpha: 0.8),
+                                          ],
+                                        ),
+                                        borderRadius: BorderRadius.circular(12),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: primaryColor.withValues(
+                                              alpha: 0.2,
+                                            ),
+                                            blurRadius: 8,
+                                            offset: const Offset(0, 4),
+                                          ),
+                                        ],
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Icon(
+                                            Icons.account_balance_wallet,
+                                            color: Colors.white,
+                                            size: 16,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            '我的钱包: RM ${balance.toStringAsFixed(2)}',
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 4),
+                                          const Icon(
+                                            Icons.chevron_right,
+                                            color: Colors.white,
+                                            size: 14,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+
+                            const SizedBox(height: 12),
+
+                            // 🛡️ KYC 按钮
+                            if (user != null)
+                              Builder(
+                                builder: (context) {
+                                  Color bgColor = Colors.green[50]!;
+                                  Color borderColor = Colors.green[200]!;
+                                  Color textColor = Colors.green;
+                                  String text = '去完成实名认证';
+                                  IconData icon = Icons.verified_user;
+                                  VoidCallback? onTap = () => Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => const KYCPage(),
+                                    ),
+                                  );
+
+                                  if (kycStatus == 'pending') {
+                                    bgColor = Colors.orange[50]!;
+                                    borderColor = Colors.orange[200]!;
+                                    textColor = Colors.orange[800]!;
+                                    text = '审核中，请耐心等待';
+                                    icon = Icons.hourglass_top_rounded;
+                                    onTap = null;
+                                  } else if (kycStatus == 'approved') {
+                                    bgColor = Colors.green[50]!;
+                                    borderColor = Colors.green[200]!;
+                                    textColor = Colors.green[800]!;
+                                    text = '实名档案已生效';
+                                    icon = Icons.verified;
+                                    onTap = null;
+                                  } else if (kycStatus == 'rejected') {
+                                    bgColor = Colors.red[50]!;
+                                    borderColor = Colors.red[200]!;
+                                    textColor = Colors.red[800]!;
+                                    text = '认证被驳回，请重试';
+                                    icon = Icons.error_outline;
+                                  }
+
+                                  return InkWell(
+                                    onTap: onTap,
+                                    borderRadius: BorderRadius.circular(12),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 14,
+                                        vertical: 10,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: bgColor,
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(color: borderColor),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            icon,
+                                            color: textColor,
+                                            size: 16,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            text,
+                                            style: TextStyle(
+                                              color: textColor,
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                          if (onTap != null)
+                                            const Icon(
+                                              Icons.chevron_right,
+                                              size: 14,
+                                            ),
+                                        ],
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+
+                            const SizedBox(height: 12),
+
+                            // 👑 老板审核大厅入口
+                            if (user != null &&
+                                user.email == 'chuitheen@gmail.com')
+                              InkWell(
                                 onTap: () => Navigator.push(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (_) => const WalletPage(),
+                                    builder: (_) => const KycReviewPage(),
                                   ),
                                 ),
                                 child: Container(
@@ -640,200 +1029,45 @@ class _ProfileView extends StatelessWidget {
                                     vertical: 10,
                                   ),
                                   decoration: BoxDecoration(
-                                    gradient: LinearGradient(
-                                      colors: [
-                                        primaryColor,
-                                        primaryColor.withValues(alpha: 0.8),
-                                      ],
-                                    ),
+                                    color: Colors.purple[50],
                                     borderRadius: BorderRadius.circular(12),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: primaryColor.withValues(
-                                          alpha: 0.2,
-                                        ),
-                                        blurRadius: 8,
-                                        offset: const Offset(0, 4),
-                                      ),
-                                    ],
+                                    border: Border.all(
+                                      color: Colors.purple[200]!,
+                                    ),
                                   ),
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      const Icon(
-                                        Icons.account_balance_wallet,
-                                        color: Colors.white,
+                                      Icon(
+                                        Icons.admin_panel_settings,
+                                        color: Colors.purple[700],
                                         size: 16,
                                       ),
                                       const SizedBox(width: 8),
                                       Text(
-                                        '我的钱包: RM ${balance.toStringAsFixed(2)}',
-                                        style: const TextStyle(
-                                          color: Colors.white,
+                                        '进入老板审核台',
+                                        style: TextStyle(
+                                          color: Colors.purple[700],
                                           fontWeight: FontWeight.bold,
                                           fontSize: 12,
                                         ),
                                       ),
                                       const SizedBox(width: 4),
-                                      const Icon(
+                                      Icon(
                                         Icons.chevron_right,
-                                        color: Colors.white,
+                                        color: Colors.purple[700],
                                         size: 14,
                                       ),
                                     ],
                                   ),
                                 ),
-                              );
-                            },
-                          ),
-                        const SizedBox(height: 12),
-                        if (user != null)
-                          StreamBuilder<DocumentSnapshot>(
-                            stream: FirebaseFirestore.instance
-                                .collection('kyc_applications')
-                                .doc(user.uid)
-                                .snapshots(),
-                            builder: (context, snapshot) {
-                              if (snapshot.connectionState ==
-                                  ConnectionState.waiting) {
-                                return const SizedBox(
-                                  height: 16,
-                                  width: 16,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                );
-                              }
-                              String status = 'none';
-                              if (snapshot.hasData && snapshot.data!.exists) {
-                                final data =
-                                    snapshot.data!.data()
-                                        as Map<String, dynamic>?;
-                                status = data?['status'] ?? 'none';
-                              }
-                              status = status.toString().trim().toLowerCase();
-
-                              Color bgColor = Colors.green[50]!;
-                              Color borderColor = Colors.green[200]!;
-                              Color textColor = Colors.green;
-                              String text = '去完成实名认证';
-                              IconData icon = Icons.verified_user;
-                              VoidCallback? onTap = () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => const KYCPage(),
-                                ),
-                              );
-
-                              if (status == 'pending') {
-                                bgColor = Colors.orange[50]!;
-                                borderColor = Colors.orange[200]!;
-                                textColor = Colors.orange[800]!;
-                                text = '审核中，请耐心等待';
-                                icon = Icons.hourglass_top_rounded;
-                                onTap = null;
-                              } else if (status == 'approved') {
-                                bgColor = Colors.green[50]!;
-                                borderColor = Colors.green[200]!;
-                                textColor = Colors.green[800]!;
-                                text = '已实名认证';
-                                icon = Icons.verified;
-                                onTap = null;
-                              } else if (status == 'rejected') {
-                                bgColor = Colors.red[50]!;
-                                borderColor = Colors.red[200]!;
-                                textColor = Colors.red[800]!;
-                                text = '认证被驳回，请重试';
-                                icon = Icons.error_outline;
-                              }
-
-                              return InkWell(
-                                onTap: onTap,
-                                borderRadius: BorderRadius.circular(12),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 14,
-                                    vertical: 10,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: bgColor,
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(color: borderColor),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(icon, color: textColor, size: 16),
-                                      const SizedBox(width: 8),
-                                      Text(
-                                        text,
-                                        style: TextStyle(
-                                          color: textColor,
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 12,
-                                        ),
-                                      ),
-                                      if (onTap != null)
-                                        const Icon(
-                                          Icons.chevron_right,
-                                          size: 14,
-                                        ),
-                                    ],
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                        const SizedBox(height: 12),
-                        if (user != null && user.email == 'chuitheen@gmail.com')
-                          InkWell(
-                            onTap: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const KycReviewPage(),
                               ),
-                            ),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 14,
-                                vertical: 10,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.purple[50],
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: Colors.purple[200]!),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    Icons.admin_panel_settings,
-                                    color: Colors.purple[700],
-                                    size: 16,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    '进入老板审核台',
-                                    style: TextStyle(
-                                      color: Colors.purple[700],
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Icon(
-                                    Icons.chevron_right,
-                                    color: Colors.purple[700],
-                                    size: 14,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ],
+                          ],
+                        ),
+                      ),
+                    ],
+                  );
+                },
               ),
             ),
             TabBar(
@@ -860,19 +1094,48 @@ class _ProfileView extends StatelessWidget {
   }
 }
 
-// _MyPostedTasksView 和 _MyAcceptedTasksView 保持原样...
+// ------------------------------------------------------------
+// 💼 我的委托 (雇主视角)
+// ------------------------------------------------------------
 class _MyPostedTasksView extends StatelessWidget {
   final String currentUid;
   const _MyPostedTasksView({required this.currentUid});
 
   Future<void> _deleteTask(BuildContext context, String docId) async {
-    await FirebaseFirestore.instance.collection('tasks').doc(docId).delete();
+    final taskRef = FirebaseFirestore.instance.collection('tasks').doc(docId);
+    final taskSnap = await taskRef.get();
+    final data = taskSnap.data() ?? {};
+
+    final double amount =
+        double.tryParse(data['amount']?.toString() ?? '0') ?? 0;
+    final int peopleCount = (data['peopleCount'] ?? 1) as int;
+    final String publisherId = data['publisherId'] ?? '';
+    final double totalRefund = amount * peopleCount;
+
+    final batch = FirebaseFirestore.instance.batch();
+    batch.delete(taskRef);
+    batch.update(
+      FirebaseFirestore.instance.collection('users').doc(publisherId),
+      {'wallet_balance': FieldValue.increment(totalRefund)},
+    );
+    batch.set(FirebaseFirestore.instance.collection('transactions').doc(), {
+      'userId': publisherId,
+      'title': '任务取消退款',
+      'amount': totalRefund,
+      'type': 'refund',
+      'status': '已退回',
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+
+    await batch.commit();
   }
 
   void _showRatingAndCompleteDialog(
     BuildContext context,
     String taskId,
     List<dynamic> acceptedUsers,
+    double amount,
+    String description,
   ) {
     int currentRating = 5;
     final commentController = TextEditingController();
@@ -932,6 +1195,9 @@ class _MyPostedTasksView extends StatelessWidget {
                             .doc(taskId),
                         {'status': 'completed'},
                       );
+                      final String titleDesc = description.length > 5
+                          ? description.substring(0, 5)
+                          : description;
                       for (String targetUid in acceptedUsers) {
                         batch.set(
                           FirebaseFirestore.instance
@@ -945,6 +1211,26 @@ class _MyPostedTasksView extends StatelessWidget {
                             'comment': commentController.text.trim().isEmpty
                                 ? '默认好评！'
                                 : commentController.text.trim(),
+                            'createdAt': FieldValue.serverTimestamp(),
+                          },
+                        );
+                        // 💰 给接单人打钱
+                        batch.update(
+                          FirebaseFirestore.instance
+                              .collection('users')
+                              .doc(targetUid),
+                          {'wallet_balance': FieldValue.increment(amount)},
+                        );
+                        batch.set(
+                          FirebaseFirestore.instance
+                              .collection('transactions')
+                              .doc(),
+                          {
+                            'userId': targetUid,
+                            'title': '任务完成收款 - $titleDesc',
+                            'amount': amount,
+                            'type': 'income',
+                            'status': '已入账',
                             'createdAt': FieldValue.serverTimestamp(),
                           },
                         );
@@ -1051,7 +1337,29 @@ class _MyPostedTasksView extends StatelessWidget {
                                 Icons.delete_outline,
                                 color: Colors.redAccent,
                               ),
-                              onPressed: () => _deleteTask(context, doc.id),
+                              onPressed: () => showDialog(
+                                context: context,
+                                builder: (ctx) => AlertDialog(
+                                  title: const Text('确认取消任务？'),
+                                  content: const Text('押金将退回您的钱包。'),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(ctx),
+                                      child: const Text('取消'),
+                                    ),
+                                    TextButton(
+                                      onPressed: () {
+                                        Navigator.pop(ctx);
+                                        _deleteTask(context, doc.id);
+                                      },
+                                      style: TextButton.styleFrom(
+                                        foregroundColor: Colors.red,
+                                      ),
+                                      child: const Text('确认删除'),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             )
                           : null,
                     ),
@@ -1087,6 +1395,11 @@ class _MyPostedTasksView extends StatelessWidget {
                                     builder: (_) => TaskChatPage(
                                       taskId: doc.id,
                                       taskDescription: desc,
+                                      amount: double.tryParse(data['amount']?.toString() ?? '0') ?? 0,
+                                      currentUserRole: 'employer',
+                                      againstUid: acceptedUsers.isNotEmpty
+                                          ? acceptedUsers.first.toString()
+                                          : '',
                                     ),
                                   ),
                                 ),
@@ -1094,23 +1407,30 @@ class _MyPostedTasksView extends StatelessWidget {
                             ),
                             const SizedBox(width: 8),
                             Expanded(
-                              child: ElevatedButton.icon(
-                                icon: const Icon(
-                                  Icons.check_circle_outline,
-                                  size: 16,
-                                ),
-                                label: const Text('确认完工'),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.green,
-                                  foregroundColor: Colors.white,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8),
+                              child: _TapScaleButton(
+                                child: ElevatedButton.icon(
+                                  icon: const Icon(
+                                    Icons.check_circle_outline,
+                                    size: 16,
                                   ),
-                                ),
-                                onPressed: () => _showRatingAndCompleteDialog(
-                                  context,
-                                  doc.id,
-                                  acceptedUsers,
+                                  label: const Text('确认完工'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.green,
+                                    foregroundColor: Colors.white,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                  ),
+                                  onPressed: () => _showRatingAndCompleteDialog(
+                                    context,
+                                    doc.id,
+                                    acceptedUsers,
+                                    double.tryParse(
+                                          data['amount']?.toString() ?? '0',
+                                        ) ??
+                                        0,
+                                    desc,
+                                  ),
                                 ),
                               ),
                             ),
@@ -1156,6 +1476,9 @@ class _MyPostedTasksView extends StatelessWidget {
   }
 }
 
+// ------------------------------------------------------------
+// 🏃‍♂️ 我的任务 (接单人视角) - 已彻底修复排版错误！
+// ------------------------------------------------------------
 class _MyAcceptedTasksView extends StatelessWidget {
   final String currentUid;
   const _MyAcceptedTasksView({required this.currentUid});
@@ -1222,6 +1545,7 @@ class _MyAcceptedTasksView extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 8),
+                    // 🚀 核心排版代码已重新梳理，绝不报错！
                     Align(
                       alignment: Alignment.centerLeft,
                       child: Text(
@@ -1236,26 +1560,31 @@ class _MyAcceptedTasksView extends StatelessWidget {
                     ),
                     if (!isCompleted) ...[
                       const Divider(height: 24),
-                      ElevatedButton.icon(
-                        icon: const Icon(Icons.chat_bubble_outline, size: 16),
-                        label: const Text(
-                          '进入任务群聊沟通',
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: primaryColor,
-                          foregroundColor: Colors.white,
-                          minimumSize: const Size(double.infinity, 40),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
+                      _TapScaleButton(
+                        child: ElevatedButton.icon(
+                          icon: const Icon(Icons.chat_bubble_outline, size: 16),
+                          label: const Text(
+                            '进入任务群聊沟通',
+                            style: TextStyle(fontWeight: FontWeight.bold),
                           ),
-                        ),
-                        onPressed: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => TaskChatPage(
-                              taskId: doc.id,
-                              taskDescription: desc,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: primaryColor,
+                            foregroundColor: Colors.white,
+                            minimumSize: const Size(double.infinity, 40),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                          onPressed: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => TaskChatPage(
+                                taskId: doc.id,
+                                taskDescription: desc,
+                                amount: double.tryParse(data['amount']?.toString() ?? '0') ?? 0,
+                                currentUserRole: 'taker',
+                                againstUid: data['publisherId'] ?? '',
+                              ),
                             ),
                           ),
                         ),

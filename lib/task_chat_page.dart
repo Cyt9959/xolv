@@ -2,16 +2,22 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:geolocator/geolocator.dart';
-import 'emergency_sos_sheet.dart';
+import 'raise_dispute_page.dart';
 
 class TaskChatPage extends StatefulWidget {
   final String taskId;
   final String taskDescription;
+  final double amount;
+  final String currentUserRole; // 'employer' 或 'taker'
+  final String againstUid;
 
   const TaskChatPage({
     super.key,
     required this.taskId,
     required this.taskDescription,
+    required this.amount,
+    required this.currentUserRole,
+    required this.againstUid,
   });
 
   @override
@@ -41,16 +47,23 @@ class _TaskChatPageState extends State<TaskChatPage> {
 
   Future<void> _fetchMyLocation() async {
     try {
-      Position pos = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-        ),
-      );
-      if (mounted) {
-        setState(() {
-          _myLat = pos.latitude;
-          _myLng = pos.longitude;
-        });
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.always ||
+          permission == LocationPermission.whileInUse) {
+        Position pos = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.high,
+          ),
+        );
+        if (mounted) {
+          setState(() {
+            _myLat = pos.latitude;
+            _myLng = pos.longitude;
+          });
+        }
       }
     } catch (_) {}
   }
@@ -107,9 +120,20 @@ class _TaskChatPageState extends State<TaskChatPage> {
               color: Colors.redAccent,
               size: 28,
             ),
-            tooltip: '紧急求助',
+            tooltip: '提交纠纷',
             onPressed: () {
-              EmergencySOS.show(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => RaiseDisputePage(
+                    taskId: widget.taskId,
+                    taskDescription: widget.taskDescription,
+                    amount: widget.amount,
+                    currentUserRole: widget.currentUserRole,
+                    againstUid: widget.againstUid,
+                  ),
+                ),
+              );
             },
           ),
           const SizedBox(width: 8),

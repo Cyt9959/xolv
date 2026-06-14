@@ -7,18 +7,23 @@ environment:
   sdk: ^3.11.5
 
 dependencies:
+  app_links: ^6.0.0
   cloud_firestore: ^6.4.1
+  easy_localization: ^3.0.7
   firebase_auth: ^6.5.1
   firebase_core: ^4.9.0
+  firebase_messaging: ^16.2.2
   firebase_storage: ^13.4.1
   flutter:
     sdk: flutter
+  flutter_local_notifications: ^17.0.0
   geocoding: ^4.0.0
   geolocator: ^14.0.2
   google_sign_in: ^7.2.0
   image: ^4.8.0
   image_picker: ^1.2.2
   path_provider: ^2.1.5
+  share_plus: ^10.0.0
   url_launcher: ^6.3.2
 
 dev_dependencies:
@@ -35,6 +40,7 @@ flutter:
   # 🚨 CTO 强制登记：必须把你的图片文件夹路径写在这里！
   assets:
     - assets/          # 👈 对应你战袍配置里的 assets/logo.png
+    - assets/translations/
 
 # ------------------------------------------------------------
 # 🎨 战袍配置 A：App 图标生成器

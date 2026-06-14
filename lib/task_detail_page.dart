@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:share_plus/share_plus.dart';
 import 'kyc_page.dart';
 
 class TaskDetailPage extends StatefulWidget {
@@ -20,97 +21,117 @@ class TaskDetailPage extends StatefulWidget {
 class _TaskDetailPageState extends State<TaskDetailPage> {
   bool _isApplying = false;
 
-  Future<void> _applyForTask() async {
+  // ========================================
+  // 📲 一键分享任务（原生分享菜单）
+  // ========================================
+  Future<void> _shareTask() async {
+    final data = widget.taskData;
+    final String taskId = widget.taskId;
+    final String shareText =
+        '''
+📢 【XOLV 悬赏任务】
+
+📝 ${data['description']}
+📍 ${data['location']}
+💰 悬赏金额：RM ${data['amount']}
+⏰ 完成时限：${data['expectedTime']}
+
+👇 点击直接查看任务：
+https://cytxolv.com/task/$taskId
+
+快来 XOLV 接单赚钱！💪
+''';
+
+    await Share.share(shareText, subject: 'XOLV 悬赏任务');
+  }
+
+  // ========================================
+  // 🛡️ KYC 双轨容错验证（与其他页面保持一致）
+  // ========================================
+  Future<String> _getKycStatus() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return 'none';
+
+    // 轨道 A：查 users 总表
+    final userDoc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .get();
+    String kycStatus = (userDoc.data()?['kyc_status'] ?? 'none')
+        .toString()
+        .trim()
+        .toLowerCase();
+
+    // 轨道 B：总表未通过则深度扫描申请表
+    if (kycStatus != 'approved') {
+      final kycAppDoc = await FirebaseFirestore.instance
+          .collection('kyc_applications')
+          .doc(user.uid)
+          .get();
+      if (kycAppDoc.exists) {
+        final appStatus = (kycAppDoc.data()?['status'] ?? 'none')
+            .toString()
+            .trim()
+            .toLowerCase();
+        if (appStatus == 'approved') {
+          kycStatus = 'approved';
+        } else if (appStatus == 'pending' && kycStatus == 'none')
+          kycStatus = 'pending';
+        else if (appStatus == 'rejected' && kycStatus == 'none')
+          kycStatus = 'rejected';
+      }
+    }
+
+    return kycStatus;
+  }
+
+  // ========================================
+  // ⚡ 主入口：接单前安检 + 防刷单 + 弹出选项
+  // ========================================
+  Future<void> _handleApply() async {
     setState(() => _isApplying = true);
+
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) throw Exception('未登录');
 
-      // 🚨 第 0 步：防刷单机制
+      // 🚨 第 0 步：防刷单——雇主不能接自己的单
       final String publisherId = widget.taskData['publisherId'] ?? '';
       if (publisherId == user.uid) {
         _showErrorDialog('老板，您不能接自己发布的悬赏哦！');
-        setState(() => _isApplying = false);
         return;
       }
 
-      // 🚨 第 1 步：轨道 A 扫描 users 总表
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .get();
-      String kycStatus = (userDoc.data()?['kyc_status'] ?? 'none')
-          .toString()
-          .trim()
-          .toLowerCase();
+      // 🚨 第 1 步：KYC 双轨验证
+      final kycStatus = await _getKycStatus();
 
-      // 🚀 核心升级：如果总表卡住，立刻用轨道 B 扫描申请表做二次核验！
       if (kycStatus != 'approved') {
-        final kycAppDoc = await FirebaseFirestore.instance
-            .collection('kyc_applications')
-            .doc(user.uid)
-            .get();
-        if (kycAppDoc.exists) {
-          final appStatus = (kycAppDoc.data()?['status'] ?? 'none')
-              .toString()
-              .trim()
-              .toLowerCase();
-          if (appStatus == 'approved') {
-            kycStatus = 'approved'; // 强行拉回绿灯状态！
-          } else if (appStatus == 'pending' && kycStatus == 'none') {
-            kycStatus = 'pending';
-          } else if (appStatus == 'rejected' && kycStatus == 'none') {
-            kycStatus = 'rejected';
-          }
+        if (kycStatus == 'pending') {
+          _showKYCDialog('【审核中】\n您的实名资料正在人工审核中，通过后即可抢单！', false);
+        } else if (kycStatus == 'rejected') {
+          _showKYCDialog('【认证失败】\n您的实名资料不符合要求，请重新拍摄清晰的证件。', true);
+        } else {
+          _showKYCDialog('【平台安全合规】\n为了保障雇主资金安全，接单前必须完成大马卡实名建档！', true);
         }
-      }
-
-      // 🛡️ 第 2 步：智能拦截
-      if (kycStatus == 'none' || kycStatus == 'unverified') {
-        _showKYCDialog('【平台安全合规】\n为了保障雇主资金安全，接单前必须完成大马卡实名建档！', true);
-        setState(() => _isApplying = false);
-        return;
-      } else if (kycStatus == 'pending') {
-        _showKYCDialog('【审核中】\n您的实名资料正在人工审核中，通过后即可抢单！', false);
-        setState(() => _isApplying = false);
-        return;
-      } else if (kycStatus == 'rejected') {
-        _showKYCDialog('【认证失败】\n您的实名资料不符合要求，请重新拍摄清晰的证件。', true);
-        setState(() => _isApplying = false);
         return;
       }
 
-      // 🚨 第 2.5 步：防重复投递
+      // 🚨 第 2 步：防重复投递
+      // ✅ 修复：正确路径 tasks/{taskId}/applications，字段名 takerId
       final existingApp = await FirebaseFirestore.instance
-          .collection('task_applications')
-          .where('taskId', isEqualTo: widget.taskId)
-          .where('applicantId', isEqualTo: user.uid)
+          .collection('tasks')
+          .doc(widget.taskId)
+          .collection('applications')
+          .where('takerId', isEqualTo: user.uid)
           .get();
 
       if (existingApp.docs.isNotEmpty) {
         _showErrorDialog('您已经申请过这个任务啦，请耐心等待雇主审核录用！');
-        setState(() => _isApplying = false);
         return;
       }
 
-      // ✅ 第 3 步：放行接单！
-      await FirebaseFirestore.instance.collection('task_applications').add({
-        'taskId': widget.taskId,
-        'applicantId': user.uid,
-        'applicantName': user.displayName ?? 'XOLV 闪电小哥',
-        'status': 'pending',
-        'appliedAt': FieldValue.serverTimestamp(),
-      });
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ 接单申请已发送，请等待雇主录用！'),
-            backgroundColor: Colors.green,
-          ),
-        );
-        Navigator.pop(context);
-      }
+      // ✅ 第 3 步：通过所有安检，弹出接单方式选择器
+      if (mounted) _showApplyOptionsSheet(user);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -122,6 +143,227 @@ class _TaskDetailPageState extends State<TaskDetailPage> {
     }
   }
 
+  // ========================================
+  // 💬 接单选项底部弹窗（直接抢单 / 谈价接单）
+  // ========================================
+  void _showApplyOptionsSheet(User user) {
+    final primaryColor = Theme.of(context).colorScheme.primary;
+    final originalAmount = widget.taskData['amount']?.toString() ?? '0';
+    final negotiateAmountController = TextEditingController();
+    final reasonController = TextEditingController();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return Padding(
+          padding: EdgeInsets.only(
+            top: 24,
+            left: 24,
+            right: 24,
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 32,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 顶部 Handle
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 20),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const Text(
+                '选择接单方式',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                '原悬赏金额：RM $originalAmount',
+                style: const TextStyle(color: Colors.grey, fontSize: 14),
+              ),
+              const SizedBox(height: 20),
+
+              // ⚡ 直接抢单
+              ElevatedButton.icon(
+                icon: const Icon(Icons.flash_on, size: 18),
+                label: const Text(
+                  '⚡ 直接抢单（按原定金额）',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: primaryColor,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(double.infinity, 52),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                onPressed: () async {
+                  Navigator.pop(ctx);
+                  await _submitApplication(
+                    user: user,
+                    type: 'direct',
+                    proposedAmount: originalAmount,
+                    reason: '直接接单，无额外留言。',
+                  );
+                },
+              ),
+
+              const SizedBox(height: 20),
+              const Row(
+                children: [
+                  Expanded(child: Divider()),
+                  Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 12),
+                    child: Text('或者谈价接单', style: TextStyle(color: Colors.grey)),
+                  ),
+                  Expanded(child: Divider()),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              // 💬 谈价接单区域
+              TextField(
+                controller: negotiateAmountController,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                decoration: InputDecoration(
+                  labelText: '我的出价（RM）',
+                  prefixText: 'RM ',
+                  filled: true,
+                  fillColor: Colors.grey[50],
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Colors.black12),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Colors.black12),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: reasonController,
+                maxLines: 2,
+                decoration: InputDecoration(
+                  labelText: '留言给雇主（说明你的技能或理由）',
+                  filled: true,
+                  fillColor: Colors.grey[50],
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Colors.black12),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Colors.black12),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              OutlinedButton.icon(
+                icon: const Icon(Icons.send_outlined, size: 18),
+                label: const Text(
+                  '提交谈价申请',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                ),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: primaryColor,
+                  side: BorderSide(color: primaryColor),
+                  minimumSize: const Size(double.infinity, 52),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                onPressed: () async {
+                  final amount = negotiateAmountController.text.trim();
+                  if (amount.isEmpty) {
+                    ScaffoldMessenger.of(
+                      ctx,
+                    ).showSnackBar(const SnackBar(content: Text('请填写您的出价！')));
+                    return;
+                  }
+                  Navigator.pop(ctx);
+                  await _submitApplication(
+                    user: user,
+                    type: 'negotiation',
+                    proposedAmount: amount,
+                    reason: reasonController.text.trim().isEmpty
+                        ? '谈价接单，无额外留言。'
+                        : reasonController.text.trim(),
+                  );
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  // ========================================
+  // ✅ 核心写入（修复后的正确路径与字段名）
+  // ========================================
+  Future<void> _submitApplication({
+    required User user,
+    required String type, // 'direct' 或 'negotiation'
+    required String proposedAmount, // 出价金额
+    required String reason, // 留言
+  }) async {
+    try {
+      // ✅ 修复 1：正确集合路径 —— tasks/{taskId}/applications（子集合）
+      // ❌ 原来错误路径：task_applications（根集合）
+      await FirebaseFirestore.instance
+          .collection('tasks')
+          .doc(widget.taskId)
+          .collection('applications')
+          .add({
+            'takerId': user.uid, // ✅ 修复 2：字段名 takerId
+            'takerName':
+                user.displayName ?? 'XOLV 闪电小哥', // ✅ 修复 3：字段名 takerName
+            'type': type, // ✅ 新增：接单类型
+            'proposedAmount': proposedAmount, // ✅ 新增：出价金额
+            'reason': reason, // ✅ 新增：留言
+            'status': 'pending',
+            'appliedAt': FieldValue.serverTimestamp(),
+          });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              type == 'direct' ? '✅ 抢单成功！请等待雇主录用！' : '✅ 谈价申请已发送，请等待雇主回复！',
+            ),
+            backgroundColor: Colors.green,
+          ),
+        );
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('提交失败: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  // ========================================
+  // 📢 弹窗辅助方法
+  // ========================================
   void _showErrorDialog(String message) {
     showDialog(
       context: context,
@@ -196,6 +438,47 @@ class _TaskDetailPageState extends State<TaskDetailPage> {
     );
   }
 
+  // ========================================
+  // 🖼️ 全屏查看任务附图
+  // ========================================
+  void _showFullImage(BuildContext context, String imageUrl) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: EdgeInsets.zero,
+        child: Stack(
+          children: [
+            GestureDetector(
+              onTap: () => Navigator.pop(ctx),
+              child: Container(
+                color: Colors.black,
+                width: double.infinity,
+                height: double.infinity,
+                child: InteractiveViewer(
+                  child: Center(
+                    child: Image.network(imageUrl, fit: BoxFit.contain),
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              top: 40,
+              right: 16,
+              child: IconButton(
+                icon: const Icon(Icons.close, color: Colors.white, size: 28),
+                onPressed: () => Navigator.pop(ctx),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ========================================
+  // 🎨 UI 构建
+  // ========================================
   @override
   Widget build(BuildContext context) {
     final data = widget.taskData;
@@ -211,12 +494,19 @@ class _TaskDetailPageState extends State<TaskDetailPage> {
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
         elevation: 0.5,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.share, color: Colors.black),
+            onPressed: _shareTask,
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // 悬赏金额卡片
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(24),
@@ -265,6 +555,30 @@ class _TaskDetailPageState extends State<TaskDetailPage> {
                 color: Colors.black87,
               ),
             ),
+            if ((data['imageUrls'] as List?)?.isNotEmpty == true) ...[
+              const SizedBox(height: 16),
+              SizedBox(
+                height: 200,
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: (data['imageUrls'] as List).length,
+                  itemBuilder: (ctx, i) => GestureDetector(
+                    onTap: () => _showFullImage(context, data['imageUrls'][i]),
+                    child: Container(
+                      margin: const EdgeInsets.only(right: 8),
+                      width: 200,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        image: DecorationImage(
+                          image: NetworkImage(data['imageUrls'][i]),
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
             const SizedBox(height: 24),
             const Divider(),
             const SizedBox(height: 16),
@@ -282,7 +596,7 @@ class _TaskDetailPageState extends State<TaskDetailPage> {
         child: Padding(
           padding: const EdgeInsets.all(16.0),
           child: ElevatedButton(
-            onPressed: _isApplying ? null : _applyForTask,
+            onPressed: _isApplying ? null : _handleApply,
             style: ElevatedButton.styleFrom(
               backgroundColor: primaryColor,
               foregroundColor: Colors.white,

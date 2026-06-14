@@ -1,9 +1,13 @@
 import 'dart:async'; // 🚀 引入时间引擎
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
+import 'package:image_picker/image_picker.dart';
 
 class PublishTaskPage extends StatefulWidget {
   const PublishTaskPage({super.key});
@@ -27,6 +31,9 @@ class _PublishTaskPageState extends State<PublishTaskPage> {
 
   double? _latitude;
   double? _longitude;
+
+  final List<File> _selectedImages = [];
+  final ImagePicker _imagePicker = ImagePicker();
 
   bool _isLoading = false;
   bool _isFetchingLocation = false;
@@ -182,6 +189,43 @@ class _PublishTaskPageState extends State<PublishTaskPage> {
     }
   }
 
+  // ========================================
+  // 🖼️ 任务附图：选择 / 移除
+  // ========================================
+  Future<void> _pickImage() async {
+    if (_selectedImages.length >= 5) return;
+
+    final XFile? picked = await _imagePicker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 80,
+    );
+    if (picked == null) return;
+
+    setState(() => _selectedImages.add(File(picked.path)));
+  }
+
+  void _removeImage(int index) {
+    setState(() => _selectedImages.removeAt(index));
+  }
+
+  // ========================================
+  // ☁️ 上传任务附图到 Firebase Storage，返回下载链接列表
+  // ========================================
+  Future<List<String>> _uploadTaskImages(String taskId) async {
+    final List<String> imageUrls = [];
+
+    for (int i = 0; i < _selectedImages.length; i++) {
+      final ref = FirebaseStorage.instance.ref(
+        'task_images/$taskId/image_$i.jpg',
+      );
+      await ref.putFile(_selectedImages[i]);
+      final url = await ref.getDownloadURL();
+      imageUrls.add(url);
+    }
+
+    return imageUrls;
+  }
+
   // =================================================================
   // 🚨 核心升级：带有“查余额+扣钱”的金融级原子提交引擎！
   // =================================================================
@@ -251,6 +295,9 @@ class _PublishTaskPageState extends State<PublishTaskPage> {
           .collection('transactions')
           .doc();
 
+      // 💡 1.5 上传任务附图（选填，最多 5 张）
+      final List<String> imageUrls = await _uploadTaskImages(newTaskRef.id);
+
       // 💡 2. 启动金融级交易锁 (Transaction)
       await FirebaseFirestore.instance.runTransaction((transaction) async {
         // 第一步：去云端查老板的账本
@@ -284,6 +331,7 @@ class _PublishTaskPageState extends State<PublishTaskPage> {
           'publisherName': user.displayName ?? 'XOLV 雇主',
           'createdAt': FieldValue.serverTimestamp(),
           'status': 'pending',
+          'imageUrls': imageUrls,
         });
 
         // 第五步：在钱包里写一条扣款流水
@@ -300,8 +348,8 @@ class _PublishTaskPageState extends State<PublishTaskPage> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('🎉 任务发布成功！资金已安全冻结。'),
+          SnackBar(
+            content: Text('publish_success'.tr()),
             backgroundColor: Colors.green,
           ),
         );
@@ -313,7 +361,7 @@ class _PublishTaskPageState extends State<PublishTaskPage> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
-                '❌ 余额不足啦！发布此任务共需 RM ${totalCost.toStringAsFixed(2)}，请先充值！',
+                '❌ ${'insufficient_funds'.tr()}啦！发布此任务共需 RM ${totalCost.toStringAsFixed(2)}，请先充值！',
               ),
               backgroundColor: Colors.red,
             ),
@@ -333,9 +381,9 @@ class _PublishTaskPageState extends State<PublishTaskPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          '发布组队委托',
-          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black),
+        title: Text(
+          'publish_task'.tr(),
+          style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black),
         ),
         backgroundColor: Colors.white,
         elevation: 0.5,
@@ -350,9 +398,9 @@ class _PublishTaskPageState extends State<PublishTaskPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Text(
-                    '任务描述',
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                  Text(
+                    'task_desc'.tr(),
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
                   TextField(
@@ -378,6 +426,82 @@ class _PublishTaskPageState extends State<PublishTaskPage> {
                   ),
                   const SizedBox(height: 20),
 
+                  // ========================================
+                  // 🖼️ 任务附图（选填，最多 5 张）
+                  // ========================================
+                  const Text(
+                    '任务附图（选填，最多 5 张）',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    height: 90,
+                    child: ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      itemCount:
+                          _selectedImages.length +
+                          (_selectedImages.length < 5 ? 1 : 0),
+                      itemBuilder: (context, index) {
+                        if (index == _selectedImages.length) {
+                          return GestureDetector(
+                            onTap: _pickImage,
+                            child: Container(
+                              width: 90,
+                              height: 90,
+                              margin: const EdgeInsets.only(right: 8),
+                              decoration: BoxDecoration(
+                                color: Colors.grey[50],
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: Colors.black12),
+                              ),
+                              child: const Icon(
+                                Icons.add_a_photo_outlined,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          );
+                        }
+
+                        return Stack(
+                          children: [
+                            Container(
+                              width: 90,
+                              height: 90,
+                              margin: const EdgeInsets.only(right: 8),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
+                                image: DecorationImage(
+                                  image: FileImage(_selectedImages[index]),
+                                  fit: BoxFit.cover,
+                                ),
+                              ),
+                            ),
+                            Positioned(
+                              top: 2,
+                              right: 10,
+                              child: GestureDetector(
+                                onTap: () => _removeImage(index),
+                                child: Container(
+                                  padding: const EdgeInsets.all(2),
+                                  decoration: const BoxDecoration(
+                                    color: Colors.black54,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.close,
+                                    color: Colors.white,
+                                    size: 14,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
@@ -398,9 +522,9 @@ class _PublishTaskPageState extends State<PublishTaskPage> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Text(
-                              '委托执行地点',
-                              style: TextStyle(
+                            Text(
+                              'task_location'.tr(),
+                              style: const TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 15,
                               ),
@@ -493,7 +617,7 @@ class _PublishTaskPageState extends State<PublishTaskPage> {
                   const SizedBox(height: 24),
 
                   _buildCounterCard(
-                    title: '需要人数',
+                    title: 'task_people'.tr(),
                     icon: Icons.people_outline,
                     displayWidget: Text(
                       '$_peopleCount 人',
@@ -510,7 +634,7 @@ class _PublishTaskPageState extends State<PublishTaskPage> {
                   const SizedBox(height: 16),
 
                   _buildCounterCard(
-                    title: '希望完成时间',
+                    title: 'task_time'.tr(),
                     icon: Icons.timer_outlined,
                     displayWidget: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -563,7 +687,7 @@ class _PublishTaskPageState extends State<PublishTaskPage> {
                       decimal: true,
                     ),
                     decoration: InputDecoration(
-                      labelText: '每人可得悬赏金额 (RM)',
+                      labelText: '${'task_amount'.tr()} (RM)',
                       prefixIcon: const Icon(Icons.attach_money),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
@@ -582,9 +706,9 @@ class _PublishTaskPageState extends State<PublishTaskPage> {
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    child: const Text(
-                      '立即发布委托',
-                      style: TextStyle(
+                    child: Text(
+                      'submit_task'.tr(),
+                      style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
                       ),

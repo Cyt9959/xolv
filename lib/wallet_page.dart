@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 class WalletPage extends StatefulWidget {
   const WalletPage({super.key});
@@ -80,9 +81,9 @@ class _WalletPageState extends State<WalletPage> {
     return Scaffold(
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
-        title: const Text(
-          '我的钱包',
-          style: TextStyle(fontWeight: FontWeight.bold),
+        title: Text(
+          'wallet'.tr(),
+          style: const TextStyle(fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
         backgroundColor: Colors.white,
@@ -130,9 +131,9 @@ class _WalletPageState extends State<WalletPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      '可用余额 (RM)',
-                      style: TextStyle(color: Colors.white70, fontSize: 14),
+                    Text(
+                      '${'balance'.tr()} (RM)',
+                      style: const TextStyle(color: Colors.white70, fontSize: 14),
                     ),
                     const SizedBox(height: 8),
                     Text(
@@ -165,14 +166,14 @@ class _WalletPageState extends State<WalletPage> {
                 Expanded(
                   child: _buildActionBtn(
                     Icons.account_balance_wallet,
-                    '测试充值',
+                    'top_up'.tr(),
                     Colors.blue,
                     _simulateTopUp, // 👈 接入充值测试电线
                   ),
                 ),
                 const SizedBox(width: 15),
                 Expanded(
-                  child: _buildActionBtn(Icons.payments, '提现', Colors.grey, () {
+                  child: _buildActionBtn(Icons.payments, 'withdraw'.tr(), Colors.grey, () {
                     ScaffoldMessenger.of(
                       context,
                     ).showSnackBar(const SnackBar(content: Text('提现功能开发中...')));
@@ -197,11 +198,11 @@ class _WalletPageState extends State<WalletPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Padding(
-                    padding: EdgeInsets.only(left: 24, top: 24, bottom: 16),
+                  Padding(
+                    padding: const EdgeInsets.only(left: 24, top: 24, bottom: 16),
                     child: Text(
-                      '交易明细',
-                      style: TextStyle(
+                      'transactions'.tr(),
+                      style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
                       ),

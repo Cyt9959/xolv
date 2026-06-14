@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:easy_localization/easy_localization.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -11,12 +13,27 @@ class SettingsPage extends StatefulWidget {
 class _SettingsPageState extends State<SettingsPage> {
   // 模拟的设置状态
   bool _pushNotifications = true;
-  String _currentLanguage = '简体中文';
+
+  // 🌍 当前语言的展示名称
+  String _languageLabel(String code) {
+    switch (code) {
+      case 'en':
+        return 'English';
+      case 'ms':
+        return 'Bahasa Malaysia';
+      default:
+        return '简体中文';
+    }
+  }
 
   // 🌍 核心新增：极其丝滑的多语言选择弹窗
   void _showLanguagePicker() {
     final primaryColor = Theme.of(context).colorScheme.primary;
-    final languages = ['简体中文', 'English', 'Bahasa Melayu'];
+    const languages = {
+      'zh': '简体中文',
+      'en': 'English',
+      'ms': 'Bahasa Malaysia',
+    };
 
     showModalBottomSheet(
       context: context,
@@ -37,12 +54,12 @@ class _SettingsPageState extends State<SettingsPage> {
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 16),
-              ...languages.map((lang) {
-                final isSelected = _currentLanguage == lang;
+              ...languages.entries.map((entry) {
+                final isSelected = context.locale.languageCode == entry.key;
                 return ListTile(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 32),
                   title: Text(
-                    lang,
+                    entry.value,
                     style: TextStyle(
                       fontWeight: isSelected
                           ? FontWeight.bold
@@ -54,17 +71,10 @@ class _SettingsPageState extends State<SettingsPage> {
                   trailing: isSelected
                       ? Icon(Icons.check_circle, color: primaryColor)
                       : null,
-                  onTap: () {
-                    setState(() => _currentLanguage = lang);
-                    Navigator.pop(ctx);
-
-                    // 弹出贴心提示
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('✅ 偏好已记录！(注: 全局多语言实时翻译引擎将在 V2.0 启动)'),
-                        backgroundColor: Colors.green,
-                      ),
-                    );
+                  onTap: () async {
+                    await context.setLocale(Locale(entry.key));
+                    if (mounted) setState(() {});
+                    if (ctx.mounted) Navigator.pop(ctx);
                   },
                 );
               }),
@@ -133,9 +143,12 @@ class _SettingsPageState extends State<SettingsPage> {
     return Scaffold(
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
-        title: const Text(
-          '设置中心',
-          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black),
+        title: Text(
+          'settings'.tr(),
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Colors.black,
+          ),
         ),
         backgroundColor: Colors.white,
         elevation: 0.5,
@@ -150,8 +163,8 @@ class _SettingsPageState extends State<SettingsPage> {
           _buildSectionTitle('系统偏好'),
           _buildListTile(
             icon: Icons.language,
-            title: '多语言 (Language)',
-            subtitle: _currentLanguage,
+            title: 'language'.tr(),
+            subtitle: _languageLabel(context.locale.languageCode),
             onTap: _showLanguagePicker,
           ),
           _buildSwitchTile(
@@ -167,13 +180,16 @@ class _SettingsPageState extends State<SettingsPage> {
           // 模块 2：通用设置
           _buildSectionTitle('通用与安全'),
           _buildListTile(
-            icon: Icons.security,
-            title: '隐私政策与用户协议',
-            onTap: () {
-              ScaffoldMessenger.of(
-                context,
-              ).showSnackBar(const SnackBar(content: Text('即将跳转至官网协议页...')));
-            },
+            icon: Icons.privacy_tip_outlined,
+            title: '隐私政策',
+            onTap: () =>
+                launchUrl(Uri.parse('https://cytxolv.com/privacy-policy.html')),
+          ),
+          _buildListTile(
+            icon: Icons.description_outlined,
+            title: '使用条款',
+            onTap: () =>
+                launchUrl(Uri.parse('https://cytxolv.com/terms.html')),
           ),
           _buildListTile(
             icon: Icons.cleaning_services_outlined,
@@ -195,9 +211,12 @@ class _SettingsPageState extends State<SettingsPage> {
             child: ElevatedButton.icon(
               onPressed: _signOut,
               icon: const Icon(Icons.logout),
-              label: const Text(
-                '退出登录',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              label: Text(
+                'logout'.tr(),
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.white,

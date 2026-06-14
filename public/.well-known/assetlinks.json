@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.example.xolv",
+      "sha256_cert_fingerprints": [
+        "81:EC:3A:D9:BE:A9:46:B0:4E:B2:19:54:2B:4C:86:94:1A:0A:32:83:85:BD:50:B0:EC:82:65:61:E2:0E:2D:37"
+      ]
+    }
+  }
+]

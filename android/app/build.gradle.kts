@@ -10,17 +10,18 @@ plugins {
 }
 
 android {
-    namespace = "com.example.xolv"
+    namespace = "com.cyt.xolv"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        isCoreLibraryDesugaringEnabled = true
     }
 
     defaultConfig {
-        applicationId = "com.example.xolv"
+        applicationId = "com.cyt.xolv"
         minSdk = flutter.minSdkVersion // 完美支持 Firebase
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
@@ -43,4 +44,8 @@ kotlin {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }

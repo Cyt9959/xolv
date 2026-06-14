@@ -1,0 +1,13 @@
+{
+  "name": "functions",
+  "description": "XOLV Cloud Functions - FCM 推送通知",
+  "main": "index.js",
+  "engines": {
+    "node": "20"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.0.0",
+    "firebase-functions": "^4.8.0"
+  },
+  "private": true
+}

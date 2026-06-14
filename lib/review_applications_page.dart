@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'taker_profile_page.dart';
 
 class ReviewApplicationsPage extends StatelessWidget {
   final String taskId;
@@ -139,11 +140,22 @@ class ReviewApplicationsPage extends StatelessWidget {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text(
-                            data['takerName'] ?? '申请人',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
+                          InkWell(
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => TakerProfilePage(
+                                  takerId: data['takerId'],
+                                ),
+                              ),
+                            ),
+                            child: Text(
+                              data['takerName'] ?? '申请人',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                                decoration: TextDecoration.underline,
+                              ),
                             ),
                           ),
 
