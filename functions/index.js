@@ -2,6 +2,7 @@ const functions = require("firebase-functions");
 const { onCall } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
+const { RtcTokenBuilder, RtcRole } = require("agora-token");
 
 admin.initializeApp();
 
@@ -306,3 +307,35 @@ exports.onUrgentTask = functions.firestore
       });
     }
   });
+
+// ==========================================
+// 🎙️📹 Agora 语音/视频通话：生成临时 RTC Token
+// ==========================================
+exports.generateAgoraToken = onCall(
+  { secrets: ["AGORA_APP_CERTIFICATE"] },
+  async (request) => {
+    const { channelName, uid } = request.data;
+
+    if (!channelName) throw new Error("Channel name is required");
+
+    const appId = "58d89cd4cb224655959281b0ead870b6";
+    const appCertificate = process.env.AGORA_APP_CERTIFICATE;
+
+    // Token 有效期 1 小时
+    const expirationTimeInSeconds = 3600;
+    const currentTimestamp = Math.floor(Date.now() / 1000);
+    const privilegeExpiredTs = currentTimestamp + expirationTimeInSeconds;
+
+    const token = RtcTokenBuilder.buildTokenWithUid(
+      appId,
+      appCertificate,
+      channelName,
+      uid || 0,
+      RtcRole.PUBLISHER,
+      privilegeExpiredTs,
+      privilegeExpiredTs
+    );
+
+    return { token, channelName, uid: uid || 0 };
+  }
+);

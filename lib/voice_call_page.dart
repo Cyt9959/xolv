@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'call_shared.dart';
 
@@ -64,8 +65,25 @@ class _VoiceCallPageState extends State<VoiceCallPage> {
     await _engine!.enableAudio();
     await _engine!.setClientRole(role: ClientRoleType.clientRoleBroadcaster);
 
+    // 🔑 先向云端换取正式 Agora Token
+    String agoraToken = '';
+    try {
+      final callable = FirebaseFunctions.instance.httpsCallable(
+        'generateAgoraToken',
+      );
+      final result = await callable.call({
+        'channelName': widget.channelName,
+        'uid': 0,
+      });
+      agoraToken = result.data['token'] as String;
+    } catch (e) {
+      debugPrint('Token 获取失败: $e');
+      if (mounted) Navigator.pop(context);
+      return;
+    }
+
     await _engine!.joinChannel(
-      token: '',
+      token: agoraToken,
       channelId: widget.channelName,
       uid: 0,
       options: const ChannelMediaOptions(
