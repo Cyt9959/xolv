@@ -149,13 +149,20 @@ class ReviewApplicationsPage extends StatelessWidget {
                                 ),
                               ),
                             ),
-                            child: Text(
-                              data['takerName'] ?? '申请人',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                                decoration: TextDecoration.underline,
-                              ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  data['takerName'] ?? '申请人',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                    decoration: TextDecoration.underline,
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                TakerLevelBadge(takerId: data['takerId'] ?? ''),
+                              ],
                             ),
                           ),
 

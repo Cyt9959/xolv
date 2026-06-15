@@ -541,6 +541,38 @@ https://cytxolv.com/task/$taskId
                 ],
               ),
             ),
+            if (data['isUrgent'] == true)
+              Container(
+                margin: const EdgeInsets.only(top: 12),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.red.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.red.shade200),
+                ),
+                child: Row(
+                  children: [
+                    const Text('🔥', style: TextStyle(fontSize: 20)),
+                    const SizedBox(width: 8),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          '急单任务',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.red,
+                          ),
+                        ),
+                        const Text(
+                          '接单额外获得 RM 2 急单奖励！',
+                          style: TextStyle(fontSize: 12, color: Colors.red),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
             const SizedBox(height: 24),
             const Text(
               '任务内容',

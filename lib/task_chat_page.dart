@@ -1,7 +1,10 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:image_picker/image_picker.dart';
 import 'raise_dispute_page.dart';
 
 class TaskChatPage extends StatefulWidget {
@@ -27,9 +30,11 @@ class TaskChatPage extends StatefulWidget {
 class _TaskChatPageState extends State<TaskChatPage> {
   final TextEditingController _textController = TextEditingController();
   final user = FirebaseAuth.instance.currentUser;
+  final ImagePicker _picker = ImagePicker();
 
   double? _myLat;
   double? _myLng;
+  bool _isUploadingPhotos = false;
 
   // 💡 核心新增：专门为跑腿场景定制的常用快捷语
   final List<String> _quickPhrases = [
@@ -90,6 +95,76 @@ class _TaskChatPageState extends State<TaskChatPage> {
         });
   }
 
+  // 📸 接单人上传完工证明照片（最多 3 张）
+  Future<void> _uploadCompletionPhotos() async {
+    if (user == null) return;
+
+    final List<XFile> images = await _picker.pickMultiImage(
+      imageQuality: 70,
+      limit: 3,
+    );
+    if (images.isEmpty) return;
+
+    setState(() => _isUploadingPhotos = true);
+
+    try {
+      final storageRef = FirebaseStorage.instance
+          .ref()
+          .child('completion_photos')
+          .child(widget.taskId)
+          .child(user!.uid);
+
+      final List<String> urls = [];
+      for (int i = 0; i < images.length; i++) {
+        final photoRef = storageRef.child('photo_$i.jpg');
+        await photoRef.putFile(File(images[i].path));
+        urls.add(await photoRef.getDownloadURL());
+      }
+
+      await FirebaseFirestore.instance
+          .collection('tasks')
+          .doc(widget.taskId)
+          .update({
+            'completionPhotos': urls,
+            'completionPhotoUploadedAt': FieldValue.serverTimestamp(),
+          });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✅ 完工证明照片已上传！'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('上传失败: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isUploadingPhotos = false);
+    }
+  }
+
+  // 🖼️ 点击放大查看图片
+  void _openPhotoViewer(String url) {
+    showDialog(
+      context: context,
+      builder: (_) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(12),
+        child: GestureDetector(
+          onTap: () => Navigator.pop(context),
+          child: InteractiveViewer(
+            child: Image.network(url, fit: BoxFit.contain),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -146,9 +221,10 @@ class _TaskChatPageState extends State<TaskChatPage> {
             .snapshots(),
         builder: (context, taskSnapshot) {
           String distanceText = "正在测算距离...";
+          Map<String, dynamic> taskData = {};
 
           if (taskSnapshot.hasData && taskSnapshot.data!.exists) {
-            final taskData = taskSnapshot.data!.data() as Map<String, dynamic>;
+            taskData = taskSnapshot.data!.data() as Map<String, dynamic>;
             final double? taskLat = taskData['latitude'];
             final double? taskLng = taskData['longitude'];
 
@@ -171,6 +247,12 @@ class _TaskChatPageState extends State<TaskChatPage> {
             }
           }
 
+          final List<dynamic> acceptedUsers = taskData['acceptedUsers'] ?? [];
+          final List<dynamic> completionPhotos =
+              taskData['completionPhotos'] ?? [];
+          final bool canUploadPhotos =
+              user != null && acceptedUsers.contains(user!.uid);
+
           return Column(
             children: [
               Container(
@@ -191,6 +273,52 @@ class _TaskChatPageState extends State<TaskChatPage> {
                   ),
                 ),
               ),
+
+              if (completionPhotos.isNotEmpty)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  color: Colors.orange[50],
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        '📸 接单人已上传完工证明',
+                        style: TextStyle(
+                          color: Colors.orange,
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        height: 80,
+                        child: ListView.builder(
+                          scrollDirection: Axis.horizontal,
+                          itemCount: completionPhotos.length,
+                          itemBuilder: (context, index) {
+                            final url = completionPhotos[index].toString();
+                            return Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: GestureDetector(
+                                onTap: () => _openPhotoViewer(url),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Image.network(
+                                    url,
+                                    width: 80,
+                                    height: 80,
+                                    fit: BoxFit.cover,
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
 
               Expanded(
                 child: StreamBuilder<QuerySnapshot>(
@@ -279,6 +407,22 @@ class _TaskChatPageState extends State<TaskChatPage> {
                 child: SafeArea(
                   child: Row(
                     children: [
+                      if (canUploadPhotos)
+                        IconButton(
+                          icon: _isUploadingPhotos
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.camera_alt_outlined),
+                          tooltip: '上传完工证明照片',
+                          onPressed: _isUploadingPhotos
+                              ? null
+                              : _uploadCompletionPhotos,
+                        ),
                       Expanded(
                         child: TextField(
                           controller: _textController,

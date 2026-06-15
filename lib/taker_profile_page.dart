@@ -8,6 +8,13 @@ class TakerProfilePage extends StatelessWidget {
   final String takerId;
   const TakerProfilePage({super.key, required this.takerId});
 
+  // 🏅 等级计算逻辑
+  static String getLevel(int completedTasks, double avgRating) {
+    if (completedTasks >= 20 && avgRating >= 4.5) return '🏆 认证达人';
+    if (completedTasks >= 5 && avgRating >= 3.5) return '⚡ 老手';
+    return '🌱 新手';
+  }
+
   String _formatJoinedDays(Timestamp? createdAt) {
     if (createdAt == null) return '加入时间未知';
     final int days = DateTime.now().difference(createdAt.toDate()).inDays;
@@ -101,6 +108,8 @@ class TakerProfilePage extends StatelessWidget {
                             size: 20,
                           ),
                         ],
+                        const SizedBox(width: 6),
+                        TakerLevelBadge(takerId: takerId),
                       ],
                     ),
                   ],
@@ -387,6 +396,96 @@ class _StatLoading extends StatelessWidget {
       height: 22,
       width: 22,
       child: CircularProgressIndicator(strokeWidth: 2, color: Colors.grey),
+    );
+  }
+}
+
+// ------------------------------------------------------------
+// 🏅 等级徽章：根据接单人等级展示不同底色的小标签
+// ------------------------------------------------------------
+class LevelBadge extends StatelessWidget {
+  final String level;
+  const LevelBadge({super.key, required this.level});
+
+  @override
+  Widget build(BuildContext context) {
+    Color bgColor;
+    Color textColor;
+    switch (level) {
+      case '🏆 认证达人':
+        bgColor = const Color(0xFFFFD700); // 金色
+        textColor = Colors.black87;
+        break;
+      case '⚡ 老手':
+        bgColor = Colors.orange;
+        textColor = Colors.white;
+        break;
+      default:
+        bgColor = Colors.grey[300]!;
+        textColor = Colors.black54;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        level,
+        style: TextStyle(
+          color: textColor,
+          fontSize: 11,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+  }
+}
+
+// ------------------------------------------------------------
+// 🏅 根据接单人的完成数 + 平均评分实时计算并展示等级徽章
+// ------------------------------------------------------------
+class TakerLevelBadge extends StatelessWidget {
+  final String takerId;
+  const TakerLevelBadge({super.key, required this.takerId});
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<QuerySnapshot>>(
+      future: Future.wait([
+        FirebaseFirestore.instance
+            .collection('tasks')
+            .where('status', isEqualTo: 'completed')
+            .where('acceptedUsers', arrayContains: takerId)
+            .get(),
+        FirebaseFirestore.instance
+            .collection('reviews')
+            .where('rateeId', isEqualTo: takerId)
+            .get(),
+      ]),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return const SizedBox.shrink();
+
+        final int completedTasks = snapshot.data![0].docs.length;
+        final reviewDocs = snapshot.data![1].docs;
+
+        double avgRating = 0;
+        if (reviewDocs.isNotEmpty) {
+          double total = 0;
+          for (var doc in reviewDocs) {
+            total +=
+                ((doc.data() as Map<String, dynamic>)['rating'] as num?)
+                    ?.toDouble() ??
+                0;
+          }
+          avgRating = total / reviewDocs.length;
+        }
+
+        return LevelBadge(
+          level: TakerProfilePage.getLevel(completedTasks, avgRating),
+        );
+      },
     );
   }
 }

@@ -2,6 +2,7 @@ import 'dart:async'; // 🚀 引入时间引擎
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -39,6 +40,8 @@ class _PublishTaskPageState extends State<PublishTaskPage> {
   bool _isFetchingLocation = false;
   bool _isGeocoding = false;
   bool _locationVerified = false;
+  bool _isPriceSuggesting = false;
+  bool _isUrgent = false;
 
   Timer? _hintTimer;
   int _currentHintIndex = 0;
@@ -54,6 +57,11 @@ class _PublishTaskPageState extends State<PublishTaskPage> {
   void initState() {
     super.initState();
     _startHintTimer();
+    _amountController.addListener(_onAmountChanged);
+  }
+
+  void _onAmountChanged() {
+    if (mounted) setState(() {});
   }
 
   void _startHintTimer() {
@@ -190,6 +198,79 @@ class _PublishTaskPageState extends State<PublishTaskPage> {
   }
 
   // ========================================
+  // ✨ AI 建议定价
+  // ========================================
+  Future<void> _suggestPrice() async {
+    final desc = _descController.text.trim();
+    final loc = _locationController.text.trim();
+    if (desc.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('请先填写任务描述！')),
+      );
+      return;
+    }
+    setState(() => _isPriceSuggesting = true);
+    try {
+      final callable = FirebaseFunctions.instance.httpsCallable(
+        'suggestTaskPrice',
+      );
+      final result = await callable.call({
+        'description': desc,
+        'location': loc,
+      });
+      final min = result.data['min'];
+      final max = result.data['max'];
+      final suggestion = result.data['suggestion'];
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            title: const Text('✨ AI 定价建议'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '建议范围：RM $min – RM $max',
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(suggestion, style: const TextStyle(color: Colors.grey)),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('参考一下'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  _amountController.text = max.toString();
+                  Navigator.pop(ctx);
+                },
+                child: const Text('用这个金额'),
+              ),
+            ],
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('建议失败: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isPriceSuggesting = false);
+    }
+  }
+
+  // ========================================
   // 🖼️ 任务附图：选择 / 移除
   // ========================================
   Future<void> _pickImage() async {
@@ -255,8 +336,10 @@ class _PublishTaskPageState extends State<PublishTaskPage> {
       return;
     }
 
-    // 💡 1. 计算要扣除的总金额
-    final double totalCost = perPersonAmount * _peopleCount;
+    // 💡 1. 计算要扣除的总金额（含急单附加费）
+    final double urgentFee = _isUrgent ? 5.0 : 0.0;
+    final double depositCost = perPersonAmount * _peopleCount;
+    final double totalCost = depositCost + urgentFee;
 
     if (!_locationVerified || _latitude == null || _longitude == null) {
       setState(() => _isLoading = true);
@@ -332,6 +415,10 @@ class _PublishTaskPageState extends State<PublishTaskPage> {
           'createdAt': FieldValue.serverTimestamp(),
           'status': 'pending',
           'imageUrls': imageUrls,
+          'isUrgent': _isUrgent,
+          'urgentFee': urgentFee,
+          'urgentBonus': _isUrgent ? 2.0 : 0.0,
+          'platformFee': _isUrgent ? 3.0 : 0.0,
         });
 
         // 第五步：在钱包里写一条扣款流水
@@ -339,11 +426,27 @@ class _PublishTaskPageState extends State<PublishTaskPage> {
           'userId': user.uid,
           'title':
               '发布任务押金 - ${desc.length > 5 ? '${desc.substring(0, 5)}...' : desc}',
-          'amount': -totalCost, // 负数代表扣款
+          'amount': -depositCost, // 负数代表扣款
           'type': 'fee',
           'createdAt': FieldValue.serverTimestamp(),
           'status': '系统扣除',
         });
+
+        // 第六步：急单附加费流水（单独一条）
+        if (_isUrgent) {
+          final urgentFeeRef = FirebaseFirestore.instance
+              .collection('transactions')
+              .doc();
+          transaction.set(urgentFeeRef, {
+            'userId': user.uid,
+            'title': '🔥 急单附加费',
+            'amount': -urgentFee,
+            'type': 'urgent_fee',
+            'status': '已扣除',
+            'taskId': newTaskRef.id,
+            'createdAt': FieldValue.serverTimestamp(),
+          });
+        }
       });
 
       if (mounted) {
@@ -681,18 +784,147 @@ class _PublishTaskPageState extends State<PublishTaskPage> {
                   ),
                   const SizedBox(height: 24),
 
-                  TextField(
-                    controller: _amountController,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    decoration: InputDecoration(
-                      labelText: '${'task_amount'.tr()} (RM)',
-                      prefixIcon: const Icon(Icons.attach_money),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _amountController,
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          decoration: InputDecoration(
+                            labelText: '${'task_amount'.tr()} (RM)',
+                            prefixIcon: const Icon(Icons.attach_money),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                        ),
                       ),
+                      const SizedBox(width: 8),
+                      SizedBox(
+                        height: 56,
+                        child: OutlinedButton(
+                          onPressed: _isPriceSuggesting ? null : _suggestPrice,
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: _ThemeColors.primary,
+                            side: const BorderSide(
+                              color: _ThemeColors.primary,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: _isPriceSuggesting
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Text('✨ AI 建议'),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // ========================================
+                  // 🔥 急单模式
+                  // ========================================
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.grey[50],
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.black12),
                     ),
+                    child: SwitchListTile(
+                      title: const Text(
+                        '🔥 急单模式',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('附加费 RM 5（系统将立即推送给附近接单人）'),
+                          if (_isUrgent)
+                            const Text(
+                              '接单人额外可得 RM 2 急单奖励',
+                              style: TextStyle(
+                                color: Colors.green,
+                                fontSize: 12,
+                              ),
+                            ),
+                        ],
+                      ),
+                      value: _isUrgent,
+                      activeThumbColor: Colors.red,
+                      onChanged: (val) => setState(() => _isUrgent = val),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // ========================================
+                  // 💰 费用明细
+                  // ========================================
+                  Builder(
+                    builder: (context) {
+                      final double amount =
+                          double.tryParse(_amountController.text.trim()) ??
+                          0.0;
+                      return Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[50],
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.black12),
+                        ),
+                        child: Column(
+                          children: [
+                            Row(
+                              children: [
+                                const Text('悬赏金额'),
+                                const Spacer(),
+                                Text('RM ${amount.toStringAsFixed(2)}'),
+                              ],
+                            ),
+                            if (_isUrgent) ...[
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  const Text('🔥 急单附加费'),
+                                  const Spacer(),
+                                  Text(
+                                    'RM 5',
+                                    style: TextStyle(color: Colors.red),
+                                  ),
+                                ],
+                              ),
+                              const Divider(),
+                              Row(
+                                children: [
+                                  const Text(
+                                    '总扣款',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  const Spacer(),
+                                  Text(
+                                    'RM ${(amount + 5).toStringAsFixed(2)}',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ],
+                        ),
+                      );
+                    },
                   ),
                   const SizedBox(height: 40),
 

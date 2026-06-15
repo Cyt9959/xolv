@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:share_plus/share_plus.dart';
 import 'publish_task_page.dart';
 import 'settings_page.dart';
@@ -12,6 +13,9 @@ import 'task_chat_page.dart';
 import 'wallet_page.dart';
 import 'kyc_page.dart';
 import 'screens/kyc_review_page.dart';
+import 'taker_profile_page.dart';
+import 'income_dashboard_page.dart';
+import 'receipt_page.dart';
 
 class MainSquarePage extends StatefulWidget {
   const MainSquarePage({super.key});
@@ -244,9 +248,15 @@ https://cytxolv.com/task/$taskId
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'XOLV 广场',
-          style: TextStyle(letterSpacing: 2, fontWeight: FontWeight.bold),
+        centerTitle: true,
+        title: Text(
+          '⚡ XOLV',
+          style: GoogleFonts.montserrat(
+            fontSize: 24,
+            fontWeight: FontWeight.w900,
+            color: const Color(0xFFFF5E00),
+            letterSpacing: -0.5,
+          ),
         ),
       ),
       body: Column(
@@ -269,14 +279,18 @@ https://cytxolv.com/task/$taskId
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Row(
+                    Row(
                       children: [
-                        Icon(Icons.radar, size: 18, color: Colors.black87),
+                        const Icon(
+                          Icons.radar,
+                          size: 18,
+                          color: Colors.black87,
+                        ),
                         Text(
                           '  探测接单范围',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
+                          style: GoogleFonts.montserrat(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 16,
                             color: Colors.black87,
                           ),
                         ),
@@ -403,10 +417,43 @@ https://cytxolv.com/task/$taskId
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(16),
                             child: Container(
-                              decoration: BoxDecoration(
-                                color: Colors.grey[50],
-                                border: Border.all(color: Colors.black12),
-                              ),
+                              decoration: data['isUrgent'] == true
+                                  ? BoxDecoration(
+                                      gradient: LinearGradient(
+                                        colors: [
+                                          const Color(
+                                            0xFFFF5E00,
+                                          ).withValues(alpha: 0.12),
+                                          const Color(
+                                            0xFFFF0000,
+                                          ).withValues(alpha: 0.06),
+                                        ],
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
+                                      ),
+                                      borderRadius: BorderRadius.circular(16),
+                                      border: Border.all(
+                                        color: Colors.red.withValues(
+                                          alpha: 0.3,
+                                        ),
+                                        width: 1.5,
+                                      ),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.red.withValues(
+                                            alpha: 0.15,
+                                          ),
+                                          blurRadius: 8,
+                                          offset: const Offset(0, 4),
+                                        ),
+                                      ],
+                                    )
+                                  : BoxDecoration(
+                                      color: Colors.grey[50],
+                                      border: Border.all(
+                                        color: Colors.black12,
+                                      ),
+                                    ),
                               child: Stack(
                                 children: [
                                   IntrinsicHeight(
@@ -434,10 +481,12 @@ https://cytxolv.com/task/$taskId
                                                     Text(
                                                       'RM ${data['amount']}',
                                                       style: TextStyle(
-                                                        fontSize: 28,
+                                                        color: const Color(
+                                                          0xFF118C4F,
+                                                        ),
                                                         fontWeight:
                                                             FontWeight.w900,
-                                                        color: primaryColor,
+                                                        fontSize: 18,
                                                       ),
                                                     ),
                                                     Container(
@@ -553,6 +602,31 @@ https://cytxolv.com/task/$taskId
                                       ),
                                     ),
                                   ),
+                                  if (data['isUrgent'] == true)
+                                    Positioned(
+                                      top: 8,
+                                      right: 8,
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 8,
+                                          vertical: 4,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: Colors.red,
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
+                                        ),
+                                        child: const Text(
+                                          '🔥 急单',
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
                                 ],
                               ),
                             ),
@@ -762,6 +836,10 @@ class _ProfileView extends StatelessWidget {
                                     size: 20,
                                   ),
                                 ],
+                                if (user != null) ...[
+                                  const SizedBox(width: 6),
+                                  TakerLevelBadge(takerId: user.uid),
+                                ],
                               ],
                             ),
                             const SizedBox(height: 4),
@@ -869,62 +947,73 @@ class _ProfileView extends StatelessWidget {
                                     balance = (data?['wallet_balance'] ?? 0.0)
                                         .toDouble();
                                   }
-                                  return InkWell(
-                                    onTap: () => Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) => const WalletPage(),
-                                      ),
-                                    ),
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 14,
-                                        vertical: 10,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        gradient: LinearGradient(
-                                          colors: [
-                                            primaryColor,
-                                            primaryColor.withValues(alpha: 0.8),
-                                          ],
+                                  return Wrap(
+                                    spacing: 8,
+                                    runSpacing: 8,
+                                    children: [
+                                      InkWell(
+                                        onTap: () => Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) => const WalletPage(),
+                                          ),
                                         ),
-                                        borderRadius: BorderRadius.circular(12),
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: primaryColor.withValues(
-                                              alpha: 0.2,
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 14,
+                                            vertical: 10,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            gradient: LinearGradient(
+                                              colors: [
+                                                primaryColor,
+                                                primaryColor.withValues(
+                                                  alpha: 0.8,
+                                                ),
+                                              ],
                                             ),
-                                            blurRadius: 8,
-                                            offset: const Offset(0, 4),
-                                          ),
-                                        ],
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          const Icon(
-                                            Icons.account_balance_wallet,
-                                            color: Colors.white,
-                                            size: 16,
-                                          ),
-                                          const SizedBox(width: 8),
-                                          Text(
-                                            '我的钱包: RM ${balance.toStringAsFixed(2)}',
-                                            style: const TextStyle(
-                                              color: Colors.white,
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 12,
+                                            borderRadius: BorderRadius.circular(
+                                              12,
                                             ),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: primaryColor.withValues(
+                                                  alpha: 0.2,
+                                                ),
+                                                blurRadius: 8,
+                                                offset: const Offset(0, 4),
+                                              ),
+                                            ],
                                           ),
-                                          const SizedBox(width: 4),
-                                          const Icon(
-                                            Icons.chevron_right,
-                                            color: Colors.white,
-                                            size: 14,
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              const Icon(
+                                                Icons.account_balance_wallet,
+                                                color: Colors.white,
+                                                size: 16,
+                                              ),
+                                              const SizedBox(width: 8),
+                                              Text(
+                                                '我的钱包: RM ${balance.toStringAsFixed(2)}',
+                                                style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 12,
+                                                ),
+                                              ),
+                                              const SizedBox(width: 4),
+                                              const Icon(
+                                                Icons.chevron_right,
+                                                color: Colors.white,
+                                                size: 14,
+                                              ),
+                                            ],
                                           ),
-                                        ],
+                                        ),
                                       ),
-                                    ),
+                                      _IncomeReportButton(uid: user.uid),
+                                    ],
                                   );
                                 },
                               ),
@@ -1095,6 +1184,57 @@ class _ProfileView extends StatelessWidget {
 }
 
 // ------------------------------------------------------------
+// 📊 收入报告按钮（仅对接过单的非雇主用户显示）
+// ------------------------------------------------------------
+class _IncomeReportButton extends StatelessWidget {
+  final String uid;
+  const _IncomeReportButton({required this.uid});
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<QuerySnapshot>(
+      future: FirebaseFirestore.instance
+          .collection('tasks')
+          .where('acceptedUsers', arrayContains: uid)
+          .limit(1)
+          .get(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return const SizedBox.shrink();
+        }
+        return InkWell(
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const IncomeDashboardPage()),
+          ),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.black12),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: const [
+                Text('📊', style: TextStyle(fontSize: 14)),
+                SizedBox(width: 8),
+                Text(
+                  '收入报告',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                ),
+                SizedBox(width: 4),
+                Icon(Icons.chevron_right, size: 14),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+// ------------------------------------------------------------
 // 💼 我的委托 (雇主视角)
 // ------------------------------------------------------------
 class _MyPostedTasksView extends StatelessWidget {
@@ -1136,6 +1276,7 @@ class _MyPostedTasksView extends StatelessWidget {
     List<dynamic> acceptedUsers,
     double amount,
     String description,
+    double urgentBonus,
   ) {
     int currentRating = 5;
     final commentController = TextEditingController();
@@ -1214,12 +1355,17 @@ class _MyPostedTasksView extends StatelessWidget {
                             'createdAt': FieldValue.serverTimestamp(),
                           },
                         );
-                        // 💰 给接单人打钱
+                        // 💰 给接单人打钱（含急单奖励）
+                        final double totalPayout = amount + urgentBonus;
                         batch.update(
                           FirebaseFirestore.instance
                               .collection('users')
                               .doc(targetUid),
-                          {'wallet_balance': FieldValue.increment(amount)},
+                          {
+                            'wallet_balance': FieldValue.increment(
+                              totalPayout,
+                            ),
+                          },
                         );
                         batch.set(
                           FirebaseFirestore.instance
@@ -1234,8 +1380,68 @@ class _MyPostedTasksView extends StatelessWidget {
                             'createdAt': FieldValue.serverTimestamp(),
                           },
                         );
+                        // 🔥 急单奖励流水（单独一条）
+                        if (urgentBonus > 0) {
+                          batch.set(
+                            FirebaseFirestore.instance
+                                .collection('transactions')
+                                .doc(),
+                            {
+                              'userId': targetUid,
+                              'title': '🔥 急单奖励',
+                              'amount': urgentBonus,
+                              'type': 'urgent_bonus',
+                              'status': '已入账',
+                              'taskId': taskId,
+                              'createdAt': FieldValue.serverTimestamp(),
+                            },
+                          );
+                        }
                       }
                       await batch.commit();
+
+                      // 🧾 生成电子收据
+                      final employerDoc = await FirebaseFirestore.instance
+                          .collection('users')
+                          .doc(currentUid)
+                          .get();
+                      final String employerName =
+                          (employerDoc.data()?['name'] ?? 'XOLV 雇主')
+                              .toString();
+
+                      String takerName = 'XOLV 接单人';
+                      if (acceptedUsers.isNotEmpty) {
+                        final takerDoc = await FirebaseFirestore.instance
+                            .collection('users')
+                            .doc(acceptedUsers.first.toString())
+                            .get();
+                        takerName =
+                            (takerDoc.data()?['name'] ?? 'XOLV 接单人')
+                                .toString();
+                      }
+
+                      final now = DateTime.now();
+                      final completedAt =
+                          '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')} '
+                          '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+
+                      if (context.mounted) {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => ReceiptPage(
+                              taskId: taskId,
+                              taskData: {
+                                'description': description,
+                                'amount': amount.toStringAsFixed(2),
+                              },
+                              takerName: takerName,
+                              employerName: employerName,
+                              completedAt: completedAt,
+                            ),
+                          ),
+                        );
+                      }
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: primaryColor,
@@ -1307,9 +1513,9 @@ class _MyPostedTasksView extends StatelessWidget {
                         children: [
                           Text(
                             'RM ${data['amount']}',
-                            style: TextStyle(
+                            style: const TextStyle(
                               fontWeight: FontWeight.bold,
-                              color: primaryColor,
+                              color: Color(0xFF118C4F),
                               fontSize: 18,
                             ),
                           ),
@@ -1430,6 +1636,7 @@ class _MyPostedTasksView extends StatelessWidget {
                                         ) ??
                                         0,
                                     desc,
+                                    (data['urgentBonus'] ?? 0.0).toDouble(),
                                   ),
                                 ),
                               ),
@@ -1526,12 +1733,10 @@ class _MyAcceptedTasksView extends StatelessWidget {
                       children: [
                         Text(
                           'RM ${data['amount']}',
-                          style: TextStyle(
+                          style: const TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 18,
-                            color: isCompleted
-                                ? Colors.grey[700]
-                                : primaryColor,
+                            color: Color(0xFF118C4F),
                           ),
                         ),
                         Text(
