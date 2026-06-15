@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'how_it_works_page.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -138,7 +139,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
   @override
   Widget build(BuildContext context) {
-    // 💡 修复1：删除了这里没用到的 primaryColor 变量
+    final primaryColor = Theme.of(context).colorScheme.primary;
 
     return Scaffold(
       backgroundColor: Colors.grey[50],
@@ -179,6 +180,26 @@ class _SettingsPageState extends State<SettingsPage> {
 
           // 模块 2：通用设置
           _buildSectionTitle('通用与安全'),
+          ListTile(
+            leading: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: primaryColor.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(Icons.menu_book, color: primaryColor, size: 20),
+            ),
+            title: const Text(
+              '📖 平台使用指南',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+            subtitle: const Text('了解如何发单和接单'),
+            trailing: const Icon(Icons.chevron_right, color: Colors.grey),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const HowItWorksPage()),
+            ),
+          ),
           _buildListTile(
             icon: Icons.privacy_tip_outlined,
             title: '隐私政策',

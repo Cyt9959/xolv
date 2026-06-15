@@ -110,6 +110,8 @@ https://cytxolv.com/task/$taskId
           _showKYCDialog('【审核中】\n您的实名资料正在人工审核中，通过后即可抢单！', false);
         } else if (kycStatus == 'rejected') {
           _showKYCDialog('【认证失败】\n您的实名资料不符合要求，请重新拍摄清晰的证件。', true);
+        } else if (kycStatus == 'revoked') {
+          _showKYCDialog('您的实名认证已被平台撤销，请联系客服了解详情。', false);
         } else {
           _showKYCDialog('【平台安全合规】\n为了保障雇主资金安全，接单前必须完成大马卡实名建档！', true);
         }

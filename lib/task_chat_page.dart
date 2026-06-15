@@ -6,6 +6,8 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'raise_dispute_page.dart';
+import 'voice_call_page.dart';
+import 'video_call_page.dart';
 
 class TaskChatPage extends StatefulWidget {
   final String taskId;
@@ -35,6 +37,7 @@ class _TaskChatPageState extends State<TaskChatPage> {
   double? _myLat;
   double? _myLng;
   bool _isUploadingPhotos = false;
+  String _otherPartyName = 'XOLV 伙伴';
 
   // 💡 核心新增：专门为跑腿场景定制的常用快捷语
   final List<String> _quickPhrases = [
@@ -48,6 +51,23 @@ class _TaskChatPageState extends State<TaskChatPage> {
   void initState() {
     super.initState();
     _fetchMyLocation();
+    _fetchOtherPartyName();
+  }
+
+  // 🪪 拉取通话对象的实名/昵称，用于通话页面展示
+  Future<void> _fetchOtherPartyName() async {
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.againstUid)
+          .get();
+      final data = doc.data();
+      final String name =
+          (data?['verifiedName'] ?? data?['name'] ?? '').toString().trim();
+      if (name.isNotEmpty && mounted) {
+        setState(() => _otherPartyName = name);
+      }
+    } catch (_) {}
   }
 
   Future<void> _fetchMyLocation() async {
@@ -189,6 +209,36 @@ class _TaskChatPageState extends State<TaskChatPage> {
         foregroundColor: Colors.black,
         centerTitle: true,
         actions: [
+          // 📞 语音通话
+          IconButton(
+            icon: const Icon(Icons.call, color: Colors.green),
+            tooltip: '语音通话',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => VoiceCallPage(
+                  channelName: widget.taskId,
+                  callerName: user?.displayName ?? 'XOLV 用户',
+                  receiverName: _otherPartyName,
+                ),
+              ),
+            ),
+          ),
+          // 📹 视频通话
+          IconButton(
+            icon: const Icon(Icons.videocam, color: Color(0xFFFF5E00)),
+            tooltip: '视频通话',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => VideoCallPage(
+                  channelName: widget.taskId,
+                  callerName: user?.displayName ?? 'XOLV 用户',
+                  receiverName: _otherPartyName,
+                ),
+              ),
+            ),
+          ),
           IconButton(
             icon: const Icon(
               Icons.local_police,

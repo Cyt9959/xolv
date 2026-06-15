@@ -450,9 +450,7 @@ https://cytxolv.com/task/$taskId
                                     )
                                   : BoxDecoration(
                                       color: Colors.grey[50],
-                                      border: Border.all(
-                                        color: Colors.black12,
-                                      ),
+                                      border: Border.all(color: Colors.black12),
                                     ),
                               child: Stack(
                                 children: [
@@ -573,6 +571,76 @@ https://cytxolv.com/task/$taskId
                                                       ),
                                                     ),
                                                   ],
+                                                ),
+                                                const SizedBox(height: 10),
+                                                FutureBuilder<DocumentSnapshot>(
+                                                  future: FirebaseFirestore
+                                                      .instance
+                                                      .collection('users')
+                                                      .doc(data['publisherId'])
+                                                      .get(),
+                                                  builder: (ctx, snap) {
+                                                    if (!snap.hasData) {
+                                                      return const SizedBox();
+                                                    }
+                                                    final userData =
+                                                        snap.data!.data()
+                                                            as Map<
+                                                              String,
+                                                              dynamic
+                                                            >?;
+                                                    final String name =
+                                                        userData?['verifiedName'] ??
+                                                        '用户';
+                                                    final int age =
+                                                        userData?['verifiedAge'] ??
+                                                        0;
+                                                    final String avatar =
+                                                        userData?['verifiedAvatarUrl'] ??
+                                                        '';
+                                                    return Row(
+                                                      children: [
+                                                        CircleAvatar(
+                                                          radius: 14,
+                                                          backgroundImage:
+                                                              avatar.isNotEmpty
+                                                              ? NetworkImage(
+                                                                  avatar,
+                                                                )
+                                                              : null,
+                                                          child: avatar.isEmpty
+                                                              ? const Icon(
+                                                                  Icons.person,
+                                                                  size: 14,
+                                                                )
+                                                              : null,
+                                                        ),
+                                                        const SizedBox(
+                                                          width: 6,
+                                                        ),
+                                                        Text(
+                                                          age > 0
+                                                              ? '$name · $age 岁'
+                                                              : name,
+                                                          style: TextStyle(
+                                                            fontSize: 12,
+                                                            color: Colors
+                                                                .grey[600],
+                                                          ),
+                                                        ),
+                                                        const SizedBox(
+                                                          width: 4,
+                                                        ),
+                                                        const Icon(
+                                                          Icons.verified,
+                                                          size: 12,
+                                                          color: Color(
+                                                            0xFF1E88E5,
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    );
+                                                  },
                                                 ),
                                               ],
                                             ),
@@ -773,388 +841,437 @@ class _ProfileView extends StatelessWidget {
                   }
                   bool isVerified = kycStatus == 'approved';
 
-                  return Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // 📸 头像区 (如果通过认证，边框会发绿光)
-                      Container(
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: isVerified
-                                ? Colors.green
-                                : Colors.transparent,
-                            width: 2,
-                          ),
-                        ),
-                        child: CircleAvatar(
-                          radius: 40,
-                          backgroundColor: isVerified
-                              ? Colors.green.withValues(alpha: 0.1)
-                              : primaryColor.withValues(alpha: 0.1),
-                          backgroundImage: user?.photoURL != null
-                              ? NetworkImage(user!.photoURL!)
-                              : null,
-                          child: user?.photoURL == null
-                              ? Icon(
-                                  isVerified
-                                      ? Icons.verified_user
-                                      : Icons.person,
-                                  size: 40,
-                                  color: isVerified
-                                      ? Colors.green
-                                      : primaryColor,
-                                )
-                              : null,
-                        ),
-                      ),
-                      const SizedBox(width: 20),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // 🌟 名字与蓝 V 认证区
-                            Row(
-                              children: [
-                                Flexible(
-                                  child: Text(
-                                    isVerified
-                                        ? (user?.displayName ?? 'XOLV 实名认证会员')
-                                        : (user?.displayName ?? 'XOLV 访客'),
-                                    style: const TextStyle(
-                                      fontSize: 22,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                if (isVerified) ...[
-                                  const SizedBox(width: 6),
-                                  const Icon(
-                                    Icons.verified,
-                                    color: Colors.blue,
-                                    size: 20,
-                                  ),
-                                ],
-                                if (user != null) ...[
-                                  const SizedBox(width: 6),
-                                  TakerLevelBadge(takerId: user.uid),
-                                ],
-                              ],
-                            ),
-                            const SizedBox(height: 4),
+                  return StreamBuilder<DocumentSnapshot>(
+                    stream: FirebaseFirestore.instance
+                        .collection('users')
+                        .doc(user?.uid)
+                        .snapshots(),
+                    builder: (context, userSnapshot) {
+                      final userDocData =
+                          userSnapshot.data?.data() as Map<String, dynamic>?;
+                      final String verifiedName =
+                          userDocData?['verifiedName'] ?? '';
+                      final int verifiedAge =
+                          (userDocData?['verifiedAge'] ?? 0) as int;
+                      final String verifiedAvatarUrl =
+                          userDocData?['verifiedAvatarUrl'] ?? '';
 
-                            // 📜 动态档案状态
-                            if (isVerified)
-                              const Text(
-                                '✅ 已绑定大马卡实名资料',
-                                style: TextStyle(
-                                  color: Colors.green,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              )
-                            else if (kycStatus == 'pending')
-                              const Text(
-                                '⏳ 实名资料审核中，请稍候',
-                                style: TextStyle(
-                                  color: Colors.orange,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              )
-                            else
-                              const Text(
-                                '⚠️ 尚未绑定实名认证',
-                                style: TextStyle(
-                                  color: Colors.redAccent,
-                                  fontSize: 12,
-                                ),
+                      return Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // 📸 头像区 (如果通过认证，边框会发绿光)
+                          Container(
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: isVerified
+                                    ? Colors.green
+                                    : Colors.transparent,
+                                width: 2,
                               ),
-
-                            const SizedBox(height: 8),
-
-                            // ⭐ 星级评价系统
-                            StreamBuilder<QuerySnapshot>(
-                              stream: FirebaseFirestore.instance
-                                  .collection('reviews')
-                                  .where('targetUserId', isEqualTo: user?.uid)
-                                  .snapshots(),
-                              builder: (context, snapshot) {
-                                if (!snapshot.hasData ||
-                                    snapshot.data!.docs.isEmpty) {
-                                  return const Text(
-                                    '⭐ 暂无评价',
-                                    style: TextStyle(
-                                      color: Colors.grey,
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  );
-                                }
-                                final docs = snapshot.data!.docs;
-                                double totalStars = 0;
-                                for (var doc in docs) {
-                                  totalStars +=
-                                      (doc.data()
-                                          as Map<String, dynamic>)['rating'] ??
-                                      5.0;
-                                }
-                                double avgRating = totalStars / docs.length;
-                                return Row(
-                                  children: [
-                                    const Icon(
-                                      Icons.star,
-                                      color: Colors.amber,
-                                      size: 16,
-                                    ),
-                                    Text(
-                                      ' ${avgRating.toStringAsFixed(1)} ',
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 14,
-                                        color: Colors.amber,
-                                      ),
-                                    ),
-                                    Text(
-                                      '(${docs.length}评价)',
-                                      style: const TextStyle(
-                                        color: Colors.grey,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                  ],
-                                );
-                              },
                             ),
-
-                            const SizedBox(height: 16),
-
-                            // 💰 云端钱包按钮
-                            if (user != null)
-                              StreamBuilder<DocumentSnapshot>(
-                                stream: FirebaseFirestore.instance
-                                    .collection('users')
-                                    .doc(user.uid)
-                                    .snapshots(),
-                                builder: (context, snapshot) {
-                                  double balance = 0.00;
-                                  if (snapshot.hasData &&
-                                      snapshot.data!.exists) {
-                                    final data =
-                                        snapshot.data!.data()
-                                            as Map<String, dynamic>?;
-                                    balance = (data?['wallet_balance'] ?? 0.0)
-                                        .toDouble();
-                                  }
-                                  return Wrap(
-                                    spacing: 8,
-                                    runSpacing: 8,
-                                    children: [
-                                      InkWell(
+                            child: CircleAvatar(
+                              radius: 40,
+                              backgroundColor: isVerified
+                                  ? Colors.green.withValues(alpha: 0.1)
+                                  : primaryColor.withValues(alpha: 0.1),
+                              backgroundImage: verifiedAvatarUrl.isNotEmpty
+                                  ? NetworkImage(verifiedAvatarUrl)
+                                  : (user?.photoURL != null
+                                        ? NetworkImage(user!.photoURL!)
+                                        : null),
+                              child:
+                                  (verifiedAvatarUrl.isEmpty &&
+                                      user?.photoURL == null)
+                                  ? Icon(
+                                      isVerified
+                                          ? Icons.verified_user
+                                          : Icons.person,
+                                      size: 40,
+                                      color: isVerified
+                                          ? Colors.green
+                                          : primaryColor,
+                                    )
+                                  : null,
+                            ),
+                          ),
+                          const SizedBox(width: 20),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // 🌟 名字与蓝 V 认证区
+                                Row(
+                                  children: [
+                                    Flexible(
+                                      child: Text(
+                                        verifiedName.isNotEmpty
+                                            ? verifiedName
+                                            : (isVerified
+                                                  ? (user?.displayName ??
+                                                        'XOLV 实名认证会员')
+                                                  : (user?.displayName ??
+                                                        'XOLV 访客')),
+                                        style: const TextStyle(
+                                          fontSize: 22,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    if (isVerified) ...[
+                                      const SizedBox(width: 6),
+                                      const Icon(
+                                        Icons.verified,
+                                        color: Colors.blue,
+                                        size: 20,
+                                      ),
+                                    ],
+                                    if (user != null) ...[
+                                      const SizedBox(width: 6),
+                                      TakerLevelBadge(takerId: user.uid),
+                                    ],
+                                    if (user != null &&
+                                        user.email ==
+                                            'chuitheen@gmail.com') ...[
+                                      const SizedBox(width: 6),
+                                      GestureDetector(
                                         onTap: () => Navigator.push(
                                           context,
                                           MaterialPageRoute(
-                                            builder: (_) => const WalletPage(),
+                                            builder: (_) =>
+                                                const KycReviewPage(),
                                           ),
                                         ),
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 10,
+                                            vertical: 4,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: Colors.purple.withValues(
+                                              alpha: 0.1,
+                                            ),
+                                            borderRadius:
+                                                BorderRadius.circular(20),
+                                            border: Border.all(
+                                              color: Colors.purple.withValues(
+                                                alpha: 0.3,
+                                              ),
+                                            ),
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(
+                                                Icons.admin_panel_settings,
+                                                size: 12,
+                                                color: Colors.purple[700],
+                                              ),
+                                              const SizedBox(width: 4),
+                                              Text(
+                                                '管理员',
+                                                style: TextStyle(
+                                                  fontSize: 11,
+                                                  color: Colors.purple[700],
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                                if (verifiedAge > 0)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 2),
+                                    child: Text(
+                                      '$verifiedAge 岁',
+                                      style: const TextStyle(
+                                        color: Colors.grey,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                  ),
+                                const SizedBox(height: 4),
+
+                                // 📜 动态档案状态
+                                if (isVerified)
+                                  const Text(
+                                    '✅ 已绑定大马卡实名资料',
+                                    style: TextStyle(
+                                      color: Colors.green,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  )
+                                else if (kycStatus == 'pending')
+                                  const Text(
+                                    '⏳ 实名资料审核中，请稍候',
+                                    style: TextStyle(
+                                      color: Colors.orange,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  )
+                                else
+                                  const Text(
+                                    '⚠️ 尚未绑定实名认证',
+                                    style: TextStyle(
+                                      color: Colors.redAccent,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+
+                                const SizedBox(height: 8),
+
+                                // ⭐ 星级评价系统
+                                StreamBuilder<QuerySnapshot>(
+                                  stream: FirebaseFirestore.instance
+                                      .collection('reviews')
+                                      .where(
+                                        'targetUserId',
+                                        isEqualTo: user?.uid,
+                                      )
+                                      .snapshots(),
+                                  builder: (context, snapshot) {
+                                    if (!snapshot.hasData ||
+                                        snapshot.data!.docs.isEmpty) {
+                                      return const Text(
+                                        '⭐ 暂无评价',
+                                        style: TextStyle(
+                                          color: Colors.grey,
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      );
+                                    }
+                                    final docs = snapshot.data!.docs;
+                                    double totalStars = 0;
+                                    for (var doc in docs) {
+                                      totalStars +=
+                                          (doc.data()
+                                              as Map<
+                                                String,
+                                                dynamic
+                                              >)['rating'] ??
+                                          5.0;
+                                    }
+                                    double avgRating = totalStars / docs.length;
+                                    return Row(
+                                      children: [
+                                        const Icon(
+                                          Icons.star,
+                                          color: Colors.amber,
+                                          size: 16,
+                                        ),
+                                        Text(
+                                          ' ${avgRating.toStringAsFixed(1)} ',
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 14,
+                                            color: Colors.amber,
+                                          ),
+                                        ),
+                                        Text(
+                                          '(${docs.length}评价)',
+                                          style: const TextStyle(
+                                            color: Colors.grey,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      ],
+                                    );
+                                  },
+                                ),
+
+                                const SizedBox(height: 16),
+
+                                // 💰 云端钱包按钮
+                                if (user != null)
+                                  StreamBuilder<DocumentSnapshot>(
+                                    stream: FirebaseFirestore.instance
+                                        .collection('users')
+                                        .doc(user.uid)
+                                        .snapshots(),
+                                    builder: (context, snapshot) {
+                                      double balance = 0.00;
+                                      if (snapshot.hasData &&
+                                          snapshot.data!.exists) {
+                                        final data =
+                                            snapshot.data!.data()
+                                                as Map<String, dynamic>?;
+                                        balance =
+                                            (data?['wallet_balance'] ?? 0.0)
+                                                .toDouble();
+                                      }
+                                      return Wrap(
+                                        spacing: 8,
+                                        runSpacing: 8,
+                                        children: [
+                                          InkWell(
+                                            onTap: () => Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                builder: (_) =>
+                                                    const WalletPage(),
+                                              ),
+                                            ),
+                                            child: Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 14,
+                                                    vertical: 10,
+                                                  ),
+                                              decoration: BoxDecoration(
+                                                gradient: LinearGradient(
+                                                  colors: [
+                                                    primaryColor,
+                                                    primaryColor.withValues(
+                                                      alpha: 0.8,
+                                                    ),
+                                                  ],
+                                                ),
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
+                                                boxShadow: [
+                                                  BoxShadow(
+                                                    color: primaryColor
+                                                        .withValues(alpha: 0.2),
+                                                    blurRadius: 8,
+                                                    offset: const Offset(0, 4),
+                                                  ),
+                                                ],
+                                              ),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  const Icon(
+                                                    Icons
+                                                        .account_balance_wallet,
+                                                    color: Colors.white,
+                                                    size: 16,
+                                                  ),
+                                                  const SizedBox(width: 8),
+                                                  Text(
+                                                    '我的钱包: RM ${balance.toStringAsFixed(2)}',
+                                                    style: const TextStyle(
+                                                      color: Colors.white,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                      fontSize: 12,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 4),
+                                                  const Icon(
+                                                    Icons.chevron_right,
+                                                    color: Colors.white,
+                                                    size: 14,
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                          _IncomeReportButton(uid: user.uid),
+                                        ],
+                                      );
+                                    },
+                                  ),
+
+                                const SizedBox(height: 12),
+
+                                // 🛡️ KYC 按钮
+                                if (user != null)
+                                  Builder(
+                                    builder: (context) {
+                                      Color bgColor = Colors.green[50]!;
+                                      Color borderColor = Colors.green[200]!;
+                                      Color textColor = Colors.green;
+                                      String text = '去完成实名认证';
+                                      IconData icon = Icons.verified_user;
+                                      VoidCallback? onTap = () =>
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (_) => const KYCPage(),
+                                            ),
+                                          );
+
+                                      if (kycStatus == 'pending') {
+                                        bgColor = Colors.orange[50]!;
+                                        borderColor = Colors.orange[200]!;
+                                        textColor = Colors.orange[800]!;
+                                        text = '审核中，请耐心等待';
+                                        icon = Icons.hourglass_top_rounded;
+                                        onTap = null;
+                                      } else if (kycStatus == 'approved') {
+                                        bgColor = Colors.green[50]!;
+                                        borderColor = Colors.green[200]!;
+                                        textColor = Colors.green[800]!;
+                                        text = '实名档案已生效';
+                                        icon = Icons.verified;
+                                        onTap = null;
+                                      } else if (kycStatus == 'rejected') {
+                                        bgColor = Colors.red[50]!;
+                                        borderColor = Colors.red[200]!;
+                                        textColor = Colors.red[800]!;
+                                        text = '认证被驳回，请重试';
+                                        icon = Icons.error_outline;
+                                      }
+
+                                      return InkWell(
+                                        onTap: onTap,
+                                        borderRadius: BorderRadius.circular(12),
                                         child: Container(
                                           padding: const EdgeInsets.symmetric(
                                             horizontal: 14,
                                             vertical: 10,
                                           ),
                                           decoration: BoxDecoration(
-                                            gradient: LinearGradient(
-                                              colors: [
-                                                primaryColor,
-                                                primaryColor.withValues(
-                                                  alpha: 0.8,
-                                                ),
-                                              ],
-                                            ),
+                                            color: bgColor,
                                             borderRadius: BorderRadius.circular(
                                               12,
                                             ),
-                                            boxShadow: [
-                                              BoxShadow(
-                                                color: primaryColor.withValues(
-                                                  alpha: 0.2,
-                                                ),
-                                                blurRadius: 8,
-                                                offset: const Offset(0, 4),
-                                              ),
-                                            ],
+                                            border: Border.all(
+                                              color: borderColor,
+                                            ),
                                           ),
                                           child: Row(
                                             mainAxisSize: MainAxisSize.min,
                                             children: [
-                                              const Icon(
-                                                Icons.account_balance_wallet,
-                                                color: Colors.white,
+                                              Icon(
+                                                icon,
+                                                color: textColor,
                                                 size: 16,
                                               ),
                                               const SizedBox(width: 8),
                                               Text(
-                                                '我的钱包: RM ${balance.toStringAsFixed(2)}',
-                                                style: const TextStyle(
-                                                  color: Colors.white,
+                                                text,
+                                                style: TextStyle(
+                                                  color: textColor,
                                                   fontWeight: FontWeight.bold,
                                                   fontSize: 12,
                                                 ),
                                               ),
-                                              const SizedBox(width: 4),
-                                              const Icon(
-                                                Icons.chevron_right,
-                                                color: Colors.white,
-                                                size: 14,
-                                              ),
+                                              if (onTap != null)
+                                                const Icon(
+                                                  Icons.chevron_right,
+                                                  size: 14,
+                                                ),
                                             ],
                                           ),
                                         ),
-                                      ),
-                                      _IncomeReportButton(uid: user.uid),
-                                    ],
-                                  );
-                                },
-                              ),
-
-                            const SizedBox(height: 12),
-
-                            // 🛡️ KYC 按钮
-                            if (user != null)
-                              Builder(
-                                builder: (context) {
-                                  Color bgColor = Colors.green[50]!;
-                                  Color borderColor = Colors.green[200]!;
-                                  Color textColor = Colors.green;
-                                  String text = '去完成实名认证';
-                                  IconData icon = Icons.verified_user;
-                                  VoidCallback? onTap = () => Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => const KYCPage(),
-                                    ),
-                                  );
-
-                                  if (kycStatus == 'pending') {
-                                    bgColor = Colors.orange[50]!;
-                                    borderColor = Colors.orange[200]!;
-                                    textColor = Colors.orange[800]!;
-                                    text = '审核中，请耐心等待';
-                                    icon = Icons.hourglass_top_rounded;
-                                    onTap = null;
-                                  } else if (kycStatus == 'approved') {
-                                    bgColor = Colors.green[50]!;
-                                    borderColor = Colors.green[200]!;
-                                    textColor = Colors.green[800]!;
-                                    text = '实名档案已生效';
-                                    icon = Icons.verified;
-                                    onTap = null;
-                                  } else if (kycStatus == 'rejected') {
-                                    bgColor = Colors.red[50]!;
-                                    borderColor = Colors.red[200]!;
-                                    textColor = Colors.red[800]!;
-                                    text = '认证被驳回，请重试';
-                                    icon = Icons.error_outline;
-                                  }
-
-                                  return InkWell(
-                                    onTap: onTap,
-                                    borderRadius: BorderRadius.circular(12),
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 14,
-                                        vertical: 10,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: bgColor,
-                                        borderRadius: BorderRadius.circular(12),
-                                        border: Border.all(color: borderColor),
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Icon(
-                                            icon,
-                                            color: textColor,
-                                            size: 16,
-                                          ),
-                                          const SizedBox(width: 8),
-                                          Text(
-                                            text,
-                                            style: TextStyle(
-                                              color: textColor,
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 12,
-                                            ),
-                                          ),
-                                          if (onTap != null)
-                                            const Icon(
-                                              Icons.chevron_right,
-                                              size: 14,
-                                            ),
-                                        ],
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
-
-                            const SizedBox(height: 12),
-
-                            // 👑 老板审核大厅入口
-                            if (user != null &&
-                                user.email == 'chuitheen@gmail.com')
-                              InkWell(
-                                onTap: () => Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => const KycReviewPage(),
+                                      );
+                                    },
                                   ),
-                                ),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 14,
-                                    vertical: 10,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.purple[50],
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(
-                                      color: Colors.purple[200]!,
-                                    ),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(
-                                        Icons.admin_panel_settings,
-                                        color: Colors.purple[700],
-                                        size: 16,
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Text(
-                                        '进入老板审核台',
-                                        style: TextStyle(
-                                          color: Colors.purple[700],
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 12,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 4),
-                                      Icon(
-                                        Icons.chevron_right,
-                                        color: Colors.purple[700],
-                                        size: 14,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                    ],
+                              ],
+                            ),
+                          ),
+                        ],
+                      );
+                    },
                   );
                 },
               ),
@@ -1361,11 +1478,7 @@ class _MyPostedTasksView extends StatelessWidget {
                           FirebaseFirestore.instance
                               .collection('users')
                               .doc(targetUid),
-                          {
-                            'wallet_balance': FieldValue.increment(
-                              totalPayout,
-                            ),
-                          },
+                          {'wallet_balance': FieldValue.increment(totalPayout)},
                         );
                         batch.set(
                           FirebaseFirestore.instance
@@ -1406,8 +1519,7 @@ class _MyPostedTasksView extends StatelessWidget {
                           .doc(currentUid)
                           .get();
                       final String employerName =
-                          (employerDoc.data()?['name'] ?? 'XOLV 雇主')
-                              .toString();
+                          (employerDoc.data()?['name'] ?? 'XOLV 雇主').toString();
 
                       String takerName = 'XOLV 接单人';
                       if (acceptedUsers.isNotEmpty) {
@@ -1415,9 +1527,8 @@ class _MyPostedTasksView extends StatelessWidget {
                             .collection('users')
                             .doc(acceptedUsers.first.toString())
                             .get();
-                        takerName =
-                            (takerDoc.data()?['name'] ?? 'XOLV 接单人')
-                                .toString();
+                        takerName = (takerDoc.data()?['name'] ?? 'XOLV 接单人')
+                            .toString();
                       }
 
                       final now = DateTime.now();
@@ -1601,7 +1712,11 @@ class _MyPostedTasksView extends StatelessWidget {
                                     builder: (_) => TaskChatPage(
                                       taskId: doc.id,
                                       taskDescription: desc,
-                                      amount: double.tryParse(data['amount']?.toString() ?? '0') ?? 0,
+                                      amount:
+                                          double.tryParse(
+                                            data['amount']?.toString() ?? '0',
+                                          ) ??
+                                          0,
                                       currentUserRole: 'employer',
                                       againstUid: acceptedUsers.isNotEmpty
                                           ? acceptedUsers.first.toString()
@@ -1786,7 +1901,11 @@ class _MyAcceptedTasksView extends StatelessWidget {
                               builder: (_) => TaskChatPage(
                                 taskId: doc.id,
                                 taskDescription: desc,
-                                amount: double.tryParse(data['amount']?.toString() ?? '0') ?? 0,
+                                amount:
+                                    double.tryParse(
+                                      data['amount']?.toString() ?? '0',
+                                    ) ??
+                                    0,
                                 currentUserRole: 'taker',
                                 againstUid: data['publisherId'] ?? '',
                               ),

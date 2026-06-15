@@ -9,6 +9,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:image_picker/image_picker.dart';
+import 'kyc_page.dart';
 
 class PublishTaskPage extends StatefulWidget {
   const PublishTaskPage({super.key});
@@ -310,7 +311,112 @@ class _PublishTaskPageState extends State<PublishTaskPage> {
   // =================================================================
   // 🚨 核心升级：带有“查余额+扣钱”的金融级原子提交引擎！
   // =================================================================
+  // ========================================
+  // 🛡️ KYC 双轨容错验证（与其他页面保持一致）
+  // ========================================
+  Future<String> _getKycStatus() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return 'none';
+
+    // 轨道 A：查 users 总表
+    final userDoc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .get();
+    String kycStatus = (userDoc.data()?['kyc_status'] ?? 'none')
+        .toString()
+        .trim()
+        .toLowerCase();
+
+    // 轨道 B：总表未通过则深度扫描申请表
+    if (kycStatus != 'approved') {
+      final kycAppDoc = await FirebaseFirestore.instance
+          .collection('kyc_applications')
+          .doc(user.uid)
+          .get();
+      if (kycAppDoc.exists) {
+        final appStatus = (kycAppDoc.data()?['status'] ?? 'none')
+            .toString()
+            .trim()
+            .toLowerCase();
+        if (appStatus == 'approved') {
+          kycStatus = 'approved';
+        } else if (appStatus == 'pending' && kycStatus == 'none') {
+          kycStatus = 'pending';
+        } else if (appStatus == 'rejected' && kycStatus == 'none') {
+          kycStatus = 'rejected';
+        }
+      }
+    }
+
+    return kycStatus;
+  }
+
+  // ========================================
+  // 🚨 实名认证安全拦截弹窗
+  // ========================================
+  void _showKYCDialog(String message, bool showGoToKYC) {
+    final primaryColor = Theme.of(context).colorScheme.primary;
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Icon(Icons.gpp_bad, color: primaryColor, size: 28),
+            const SizedBox(width: 8),
+            const Text(
+              '安全拦截',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+            ),
+          ],
+        ),
+        content: Text(message, style: const TextStyle(height: 1.5, fontSize: 14)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('稍后再说', style: TextStyle(color: Colors.grey)),
+          ),
+          if (showGoToKYC)
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const KYCPage()),
+                );
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text(
+                '立即前往认证',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _submitTask() async {
+    // 🚨 第 0 步：KYC 双轨验证 —— 未通过实名认证不可发布悬赏
+    final kycStatus = await _getKycStatus();
+    if (!mounted) return;
+    if (kycStatus != 'approved') {
+      if (kycStatus == 'pending') {
+        _showKYCDialog('【审核中】\n您的实名资料正在人工审核中，通过后即可发布悬赏！', false);
+      } else if (kycStatus == 'rejected') {
+        _showKYCDialog('【认证失败】\n您的实名资料不符合要求，请重新拍摄清晰的证件。', true);
+      } else if (kycStatus == 'revoked') {
+        _showKYCDialog('您的实名认证已被平台撤销，请联系客服了解详情。', false);
+      } else {
+        _showKYCDialog('【平台安全合规】\n为了保障交易资金安全，发布悬赏前必须完成大马卡实名建档！', true);
+      }
+      return;
+    }
+
     final desc = _descController.text.trim();
     final location = _locationController.text.trim();
     final amountText = _amountController.text.trim();

@@ -140,29 +140,85 @@ class ReviewApplicationsPage extends StatelessWidget {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          InkWell(
-                            onTap: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => TakerProfilePage(
-                                  takerId: data['takerId'],
-                                ),
-                              ),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  data['takerName'] ?? '申请人',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
-                                    decoration: TextDecoration.underline,
+                          Expanded(
+                            child: InkWell(
+                              onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => TakerProfilePage(
+                                    takerId: data['takerId'],
                                   ),
                                 ),
-                                const SizedBox(width: 6),
-                                TakerLevelBadge(takerId: data['takerId'] ?? ''),
-                              ],
+                              ),
+                              child: FutureBuilder<DocumentSnapshot>(
+                                future: FirebaseFirestore.instance
+                                    .collection('users')
+                                    .doc(data['takerId'])
+                                    .get(),
+                                builder: (ctx, snap) {
+                                  final userData =
+                                      snap.data?.data()
+                                          as Map<String, dynamic>?;
+                                  final String verifiedName =
+                                      userData?['verifiedName'] ?? '';
+                                  final int verifiedAge =
+                                      (userData?['verifiedAge'] ?? 0) as int;
+                                  final String verifiedAvatarUrl =
+                                      userData?['verifiedAvatarUrl'] ?? '';
+                                  final bool hasVerified =
+                                      verifiedName.isNotEmpty;
+
+                                  return Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      if (hasVerified) ...[
+                                        CircleAvatar(
+                                          radius: 12,
+                                          backgroundImage:
+                                              verifiedAvatarUrl.isNotEmpty
+                                              ? NetworkImage(verifiedAvatarUrl)
+                                              : null,
+                                          child: verifiedAvatarUrl.isEmpty
+                                              ? const Icon(
+                                                  Icons.person,
+                                                  size: 12,
+                                                )
+                                              : null,
+                                        ),
+                                        const SizedBox(width: 6),
+                                      ],
+                                      Flexible(
+                                        child: Text(
+                                          hasVerified
+                                              ? (verifiedAge > 0
+                                                    ? '$verifiedName · $verifiedAge 岁'
+                                                    : verifiedName)
+                                              : (data['takerName'] ?? '申请人'),
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 16,
+                                            decoration:
+                                                TextDecoration.underline,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      if (hasVerified) ...[
+                                        const SizedBox(width: 4),
+                                        const Icon(
+                                          Icons.verified,
+                                          size: 14,
+                                          color: Color(0xFF1E88E5),
+                                        ),
+                                      ],
+                                      const SizedBox(width: 6),
+                                      TakerLevelBadge(
+                                        takerId: data['takerId'] ?? '',
+                                      ),
+                                    ],
+                                  );
+                                },
+                              ),
                             ),
                           ),
 

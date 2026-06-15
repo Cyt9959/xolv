@@ -193,6 +193,80 @@ exports.suggestTaskPrice = onCall(async (request) => {
 });
 
 // ==========================================
+// 🪪 KYC 通过后：用 Gemini Vision 读取 IC 正面，提取姓名/IC号并计算年龄
+// ==========================================
+exports.extractICData = onCall(async (request) => {
+  const { uid, icFrontUrl, selfieUrl } = request.data;
+  if (!uid || !icFrontUrl) {
+    throw new Error("缺少必要参数 uid 或 icFrontUrl");
+  }
+
+  // 下载 IC 正面图片并转 base64
+  const imgResponse = await fetch(icFrontUrl);
+  const imgBuffer = Buffer.from(await imgResponse.arrayBuffer());
+  const base64Image = imgBuffer.toString("base64");
+  const mimeType = imgResponse.headers.get("content-type") || "image/jpeg";
+
+  // 用 Gemini Vision 读取 IC 资料
+  const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+  const result = await model.generateContent([
+    {
+      inlineData: {
+        mimeType,
+        data: base64Image,
+      },
+    },
+    `这是一张马来西亚身份证（MyKad）图片。
+请提取以下资料并只返回 JSON，不要其他文字：
+{
+  "fullName": "身份证上的全名",
+  "icNumber": "身份证号码（格式：XXXXXX-XX-XXXX）"
+}
+如果看不清楚就返回 {"fullName": "", "icNumber": ""}`,
+  ]);
+
+  const text = result.response.text().trim();
+  const clean = text.replace(/```json|```/g, "").trim();
+  const { fullName, icNumber } = JSON.parse(clean);
+
+  // 从 IC 号码（YYMMDD-XX-XXXX）计算年龄
+  let age = 0;
+  if (icNumber && icNumber.length >= 6) {
+    const digits = icNumber.replace(/-/g, "");
+    const yy = parseInt(digits.substring(0, 2));
+    const mm = parseInt(digits.substring(2, 4));
+    const dd = parseInt(digits.substring(4, 6));
+    const fullYear = yy <= 30 ? 2000 + yy : 1900 + yy;
+    const birthDate = new Date(fullYear, mm - 1, dd);
+    const today = new Date();
+    age = today.getFullYear() - birthDate.getFullYear();
+    const m = today.getMonth() - birthDate.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--;
+  }
+
+  // 写入 /users/{uid}：用于个人中心与任务卡片展示
+  await db.collection("users").doc(uid).set(
+    {
+      verifiedName: fullName,
+      verifiedAge: age,
+      verifiedAvatarUrl: selfieUrl || "",
+      kyc_status: "approved",
+    },
+    { merge: true }
+  );
+
+  // IC 号码属于敏感个人资料，只写入审核专用文档（非公开可读）
+  await db.collection("kyc_applications").doc(uid).set(
+    { verifiedIC: icNumber },
+    { merge: true }
+  );
+
+  return { fullName, age, icNumber };
+});
+
+// ==========================================
 // 🔥 trigger 4：新发布的急单 -> 推送给所有已通过 KYC 的用户
 // ==========================================
 exports.onUrgentTask = functions.firestore
