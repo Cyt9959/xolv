@@ -18,28 +18,15 @@ import 'income_dashboard_page.dart';
 import 'receipt_page.dart';
 
 class MainSquarePage extends StatefulWidget {
-  final int? initialTab; // 0=广场 1=发布 2=我的
-  final int? initialSubTab; // 在"我的"页面里，0=我的任务 1=我的委托
-
-  const MainSquarePage({super.key, this.initialTab, this.initialSubTab});
+  const MainSquarePage({super.key, required int initialTab});
 
   @override
   State<MainSquarePage> createState() => _MainSquarePageState();
 }
 
 class _MainSquarePageState extends State<MainSquarePage> {
-  late int _currentIndex;
-  late final List<Widget> _pages;
-
-  @override
-  void initState() {
-    super.initState();
-    _currentIndex = widget.initialTab ?? 0;
-    _pages = [
-      const _HomeView(),
-      _ProfileView(initialSubTab: widget.initialSubTab),
-    ];
-  }
+  int _currentIndex = 0;
+  final List<Widget> _pages = [const _HomeView(), const _ProfileView()];
 
   // 📛 我的钱包/我的 Tab 未读 Badge：监听我发布的所有任务，累加 pendingApplicationsCount
   Widget _buildProfileIcon() {
@@ -856,8 +843,7 @@ class _TapScaleButtonState extends State<_TapScaleButton> {
 // 👤 个人大厅 (全自动档案显示版)
 // ------------------------------------------------------------
 class _ProfileView extends StatelessWidget {
-  final int? initialSubTab; // 0=我的任务 1=我的委托
-  const _ProfileView({this.initialSubTab});
+  const _ProfileView();
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
@@ -865,7 +851,6 @@ class _ProfileView extends StatelessWidget {
 
     return DefaultTabController(
       length: 2,
-      initialIndex: initialSubTab ?? 0,
       child: Scaffold(
         appBar: AppBar(
           title: const Text(
@@ -1704,8 +1689,9 @@ class _MyPostedTasksView extends StatelessWidget {
           .where('publisherId', isEqualTo: currentUid)
           .snapshots(),
       builder: (context, snapshot) {
-        if (!snapshot.hasData)
+        if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
+        }
         final filteredDocs = snapshot.data!.docs.where((doc) {
           final status = (doc.data() as Map)['status'];
           return status != 'completed' && status != 'disputed_closed';
@@ -1963,8 +1949,9 @@ class _MyAcceptedTasksView extends StatelessWidget {
           .where('acceptedUsers', arrayContains: currentUid)
           .snapshots(),
       builder: (context, snapshot) {
-        if (!snapshot.hasData)
+        if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
+        }
         final filteredDocs = snapshot.data!.docs.where((doc) {
           final status = (doc.data() as Map)['status'];
           return status != 'completed' && status != 'disputed_closed';
