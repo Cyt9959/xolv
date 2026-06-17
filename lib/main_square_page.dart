@@ -34,7 +34,7 @@ class _MainSquarePageState extends State<MainSquarePage> {
   // 📛 我的钱包/我的 Tab 未读 Badge：监听我发布的所有任务，累加 pendingApplicationsCount
   Widget _buildProfileIcon() {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return const Icon(Icons.person);
+    if (user == null) return const Icon(Icons.person, size: 28);
 
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
@@ -54,7 +54,7 @@ class _MainSquarePageState extends State<MainSquarePage> {
         return Stack(
           clipBehavior: Clip.none,
           children: [
-            const Icon(Icons.person),
+            const Icon(Icons.person, size: 28),
             if (totalPending > 0)
               Positioned(
                 right: -6,
@@ -220,16 +220,21 @@ class _MainSquarePageState extends State<MainSquarePage> {
         selectedItemColor: primaryColor,
         unselectedItemColor: Colors.grey,
         type: BottomNavigationBarType.fixed,
+        showSelectedLabels: false,
+        showUnselectedLabels: false,
         items: [
-          const BottomNavigationBarItem(icon: Icon(Icons.explore), label: '广场'),
+          const BottomNavigationBarItem(
+            icon: Icon(Icons.explore, size: 28),
+            label: '',
+          ),
           BottomNavigationBarItem(
             icon: CircleAvatar(
               backgroundColor: primaryColor,
-              child: const Icon(Icons.add, color: Colors.white),
+              child: const Icon(Icons.add, color: Colors.white, size: 28),
             ),
-            label: '发布',
+            label: '',
           ),
-          BottomNavigationBarItem(icon: _buildProfileIcon(), label: '我的'),
+          BottomNavigationBarItem(icon: _buildProfileIcon(), label: ''),
         ],
       ),
     );
