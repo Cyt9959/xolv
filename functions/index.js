@@ -198,7 +198,7 @@ exports.onCallCreated = functions.firestore
 // ==========================================
 // 🤖 AI 助手：润色任务描述（Google Gemini）
 // ==========================================
-exports.improveTaskDescription = onCall(async (request) => {
+exports.improveTaskDescription = onCall({ secrets: ["GEMINI_API_KEY"] }, async (request) => {
   const roughDescription = request.data.description;
   if (!roughDescription || roughDescription.trim().length < 5) {
     throw new Error("描述太短了！");
@@ -225,7 +225,7 @@ exports.improveTaskDescription = onCall(async (request) => {
 // ==========================================
 // 🤖 AI 助手：建议任务定价（Google Gemini）
 // ==========================================
-exports.suggestTaskPrice = onCall(async (request) => {
+exports.suggestTaskPrice = onCall({ secrets: ["GEMINI_API_KEY"] }, async (request) => {
   const { description, location } = request.data;
 
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
@@ -248,7 +248,7 @@ exports.suggestTaskPrice = onCall(async (request) => {
 // ==========================================
 // 🪪 KYC 通过后：用 Gemini Vision 读取 IC 正面，提取姓名/IC号并计算年龄
 // ==========================================
-exports.extractICData = onCall(async (request) => {
+exports.extractICData = onCall({ secrets: ["GEMINI_API_KEY"] }, async (request) => {
   const { uid, icFrontUrl, selfieUrl } = request.data;
   if (!uid || !icFrontUrl) {
     throw new Error("缺少必要参数 uid 或 icFrontUrl");

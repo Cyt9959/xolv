@@ -173,20 +173,23 @@ class KycReviewPage extends StatelessWidget {
                                           12,
                                         ),
                                         child: icFrontUrl.isNotEmpty
-                                            ? Image.network(
-                                                icFrontUrl,
-                                                height: 130,
-                                                width: double.infinity,
-                                                fit: BoxFit.cover,
-                                                errorBuilder: (_, _, _) =>
-                                                    Container(
-                                                      height: 130,
-                                                      color: Colors.grey[100],
-                                                      child: const Icon(
-                                                        Icons.broken_image,
-                                                        color: Colors.grey,
+                                            ? GestureDetector(
+                                                onTap: () => _showFullImage(context, icFrontUrl),
+                                                child: Image.network(
+                                                  icFrontUrl,
+                                                  height: 130,
+                                                  width: double.infinity,
+                                                  fit: BoxFit.cover,
+                                                  errorBuilder: (_, _, _) =>
+                                                      Container(
+                                                        height: 130,
+                                                        color: Colors.grey[100],
+                                                        child: const Icon(
+                                                          Icons.broken_image,
+                                                          color: Colors.grey,
+                                                        ),
                                                       ),
-                                                    ),
+                                                ),
                                               )
                                             : Container(
                                                 height: 130,
@@ -218,20 +221,23 @@ class KycReviewPage extends StatelessWidget {
                                           12,
                                         ),
                                         child: selfieUrl.isNotEmpty
-                                            ? Image.network(
-                                                selfieUrl,
-                                                height: 130,
-                                                width: double.infinity,
-                                                fit: BoxFit.cover,
-                                                errorBuilder: (_, _, _) =>
-                                                    Container(
-                                                      height: 130,
-                                                      color: Colors.grey[100],
-                                                      child: const Icon(
-                                                        Icons.broken_image,
-                                                        color: Colors.grey,
+                                            ? GestureDetector(
+                                                onTap: () => _showFullImage(context, selfieUrl),
+                                                child: Image.network(
+                                                  selfieUrl,
+                                                  height: 130,
+                                                  width: double.infinity,
+                                                  fit: BoxFit.cover,
+                                                  errorBuilder: (_, _, _) =>
+                                                      Container(
+                                                        height: 130,
+                                                        color: Colors.grey[100],
+                                                        child: const Icon(
+                                                          Icons.broken_image,
+                                                          color: Colors.grey,
+                                                        ),
                                                       ),
-                                                    ),
+                                                ),
                                               )
                                             : Container(
                                                 height: 130,
@@ -266,17 +272,20 @@ class KycReviewPage extends StatelessWidget {
                                 ClipRRect(
                                   borderRadius: BorderRadius.circular(12),
                                   child: icBackUrl.isNotEmpty
-                                      ? Image.network(
-                                          icBackUrl,
-                                          height: 120,
-                                          width: double.infinity,
-                                          fit: BoxFit.cover,
-                                          errorBuilder: (_, _, _) => Container(
+                                      ? GestureDetector(
+                                          onTap: () => _showFullImage(context, icBackUrl),
+                                          child: Image.network(
+                                            icBackUrl,
                                             height: 120,
-                                            color: Colors.grey[100],
-                                            child: const Icon(
-                                              Icons.broken_image,
-                                              color: Colors.grey,
+                                            width: double.infinity,
+                                            fit: BoxFit.cover,
+                                            errorBuilder: (_, _, _) => Container(
+                                              height: 120,
+                                              color: Colors.grey[100],
+                                              child: const Icon(
+                                                Icons.broken_image,
+                                                color: Colors.grey,
+                                              ),
                                             ),
                                           ),
                                         )
@@ -526,19 +535,22 @@ class KycReviewPage extends StatelessWidget {
 
       await batch.commit();
 
-      // 🤖 批准后异步提取 IC 实名资料（不影响主流程，失败也静默处理）
+      // 🤖 批准后异步提取 IC 实名资料（不影响主流程，失败/超时也静默处理）
       if (isApproved) {
+        debugPrint('开始提取 IC 资料: uid=$userId, icFrontUrl=$icFrontUrl');
         try {
           final callable = FirebaseFunctions.instance.httpsCallable(
             'extractICData',
+            options: HttpsCallableOptions(timeout: const Duration(seconds: 15)),
           );
-          await callable.call({
+          final result = await callable.call({
             'uid': userId,
             'icFrontUrl': icFrontUrl,
             'selfieUrl': selfieUrl,
-          });
+          }).timeout(const Duration(seconds: 15));
+          debugPrint('IC 提取结果: ${result.data}');
         } catch (e) {
-          debugPrint('IC 资料提取失败: $e');
+          debugPrint('IC 资料提取失败或超时: $e');
         }
       }
 
@@ -559,6 +571,32 @@ class KycReviewPage extends StatelessWidget {
         );
       }
     }
+  }
+
+  void _showFullImage(BuildContext context, String imageUrl) {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black87,
+      builder: (ctx) => Stack(
+        children: [
+          InteractiveViewer(
+            minScale: 0.5,
+            maxScale: 4.0,
+            child: Center(
+              child: Image.network(imageUrl, fit: BoxFit.contain),
+            ),
+          ),
+          Positioned(
+            top: 40,
+            right: 16,
+            child: IconButton(
+              icon: const Icon(Icons.close, color: Colors.white, size: 32),
+              onPressed: () => Navigator.pop(ctx),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   // 🚫 撤销实名认证（管理员操作）：弹窗确认后，三步联动写入
