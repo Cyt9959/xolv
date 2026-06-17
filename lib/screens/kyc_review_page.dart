@@ -535,33 +535,32 @@ class KycReviewPage extends StatelessWidget {
 
       await batch.commit();
 
-      // 🤖 批准后异步提取 IC 实名资料（不影响主流程，失败/超时也静默处理）
-      if (isApproved) {
-        debugPrint('开始提取 IC 资料: uid=$userId, icFrontUrl=$icFrontUrl');
-        try {
-          final callable = FirebaseFunctions.instance.httpsCallable(
-            'extractICData',
-            options: HttpsCallableOptions(timeout: const Duration(seconds: 15)),
-          );
-          final result = await callable.call({
-            'uid': userId,
-            'icFrontUrl': icFrontUrl,
-            'selfieUrl': selfieUrl,
-          }).timeout(const Duration(seconds: 15));
-          debugPrint('IC 提取结果: ${result.data}');
-        } catch (e) {
-          debugPrint('IC 资料提取失败或超时: $e');
-        }
-      }
-
+      // ✅ 立刻关闭 loading 并显示成功提示，不等 IC 提取
       if (context.mounted) {
-        Navigator.pop(context); // 关闭加载圈圈
+        Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(isApproved ? '✅ 该用户已成功通过实名认证！' : '❌ 已驳回该用户的申请。'),
             backgroundColor: isApproved ? Colors.green : Colors.red,
           ),
         );
+      }
+
+      // 🤖 IC 提取改为完全背景执行（不 await，不阻塞 UI）
+      if (isApproved) {
+        debugPrint('开始提取 IC 资料: uid=$userId, icFrontUrl=$icFrontUrl');
+        FirebaseFunctions.instance
+            .httpsCallable(
+              'extractICData',
+              options: HttpsCallableOptions(timeout: const Duration(seconds: 30)),
+            )
+            .call({
+              'uid': userId,
+              'icFrontUrl': icFrontUrl,
+              'selfieUrl': selfieUrl,
+            })
+            .then((result) => debugPrint('IC 提取结果: ${result.data}'))
+            .catchError((e) => debugPrint('IC 资料提取失败: $e'));
       }
     } catch (e) {
       if (context.mounted) {

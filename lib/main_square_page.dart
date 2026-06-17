@@ -997,17 +997,8 @@ class _ProfileView extends StatelessWidget {
                                   ),
                                 const SizedBox(height: 4),
 
-                                // 📜 动态档案状态
-                                if (isVerified)
-                                  const Text(
-                                    '✅ 已绑定大马卡实名资料',
-                                    style: TextStyle(
-                                      color: Colors.green,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  )
-                                else if (kycStatus == 'pending')
+                                // 📜 动态档案状态（已认证时不重复提示）
+                                if (kycStatus == 'pending')
                                   const Text(
                                     '⏳ 实名资料审核中，请稍候',
                                     style: TextStyle(
@@ -1016,7 +1007,7 @@ class _ProfileView extends StatelessWidget {
                                       fontWeight: FontWeight.bold,
                                     ),
                                   )
-                                else
+                                else if (!isVerified)
                                   const Text(
                                     '⚠️ 尚未绑定实名认证',
                                     style: TextStyle(
@@ -1107,74 +1098,112 @@ class _ProfileView extends StatelessWidget {
                                             (data?['wallet_balance'] ?? 0.0)
                                                 .toDouble();
                                       }
-                                      return Wrap(
-                                        spacing: 8,
-                                        runSpacing: 8,
+                                      return Row(
                                         children: [
-                                          InkWell(
-                                            onTap: () => Navigator.push(
-                                              context,
-                                              MaterialPageRoute(
-                                                builder: (_) =>
-                                                    const WalletPage(),
+                                          Expanded(
+                                            child: GestureDetector(
+                                              onTap: () => Navigator.push(
+                                                context,
+                                                MaterialPageRoute(
+                                                  builder: (_) =>
+                                                      const WalletPage(),
+                                                ),
                                               ),
-                                            ),
-                                            child: Container(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                    horizontal: 14,
-                                                    vertical: 10,
-                                                  ),
-                                              decoration: BoxDecoration(
-                                                gradient: LinearGradient(
-                                                  colors: [
-                                                    primaryColor,
-                                                    primaryColor.withValues(
-                                                      alpha: 0.8,
+                                              child: Container(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      vertical: 16,
+                                                      horizontal: 12,
+                                                    ),
+                                                decoration: BoxDecoration(
+                                                  color: primaryColor,
+                                                  borderRadius:
+                                                      BorderRadius.circular(16),
+                                                ),
+                                                child: Row(
+                                                  mainAxisAlignment:
+                                                      MainAxisAlignment.center,
+                                                  children: [
+                                                    const Icon(
+                                                      Icons
+                                                          .account_balance_wallet,
+                                                      color: Colors.white,
+                                                      size: 18,
+                                                    ),
+                                                    const SizedBox(width: 8),
+                                                    Flexible(
+                                                      child: Text(
+                                                        '我的钱包: RM ${balance.toStringAsFixed(2)}',
+                                                        style: const TextStyle(
+                                                          color: Colors.white,
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                          fontSize: 13,
+                                                        ),
+                                                        overflow:
+                                                            TextOverflow
+                                                                .ellipsis,
+                                                      ),
                                                     ),
                                                   ],
                                                 ),
-                                                borderRadius:
-                                                    BorderRadius.circular(12),
-                                                boxShadow: [
-                                                  BoxShadow(
-                                                    color: primaryColor
-                                                        .withValues(alpha: 0.2),
-                                                    blurRadius: 8,
-                                                    offset: const Offset(0, 4),
-                                                  ),
-                                                ],
-                                              ),
-                                              child: Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  const Icon(
-                                                    Icons
-                                                        .account_balance_wallet,
-                                                    color: Colors.white,
-                                                    size: 16,
-                                                  ),
-                                                  const SizedBox(width: 8),
-                                                  Text(
-                                                    '我的钱包: RM ${balance.toStringAsFixed(2)}',
-                                                    style: const TextStyle(
-                                                      color: Colors.white,
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                      fontSize: 12,
-                                                    ),
-                                                  ),
-                                                  const SizedBox(width: 4),
-                                                  const Icon(
-                                                    Icons.chevron_right,
-                                                    color: Colors.white,
-                                                    size: 14,
-                                                  ),
-                                                ],
                                               ),
                                             ),
                                           ),
-                                          _IncomeReportButton(uid: user.uid),
+                                          const SizedBox(width: 10),
+                                          Expanded(
+                                            child: GestureDetector(
+                                              onTap: () => Navigator.push(
+                                                context,
+                                                MaterialPageRoute(
+                                                  builder: (_) =>
+                                                      const IncomeDashboardPage(),
+                                                ),
+                                              ),
+                                              child: Container(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      vertical: 16,
+                                                      horizontal: 12,
+                                                    ),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.white,
+                                                  borderRadius:
+                                                      BorderRadius.circular(16),
+                                                  border: Border.all(
+                                                    color:
+                                                        Colors.grey.shade300,
+                                                  ),
+                                                ),
+                                                child: Row(
+                                                  mainAxisAlignment:
+                                                      MainAxisAlignment.center,
+                                                  children: [
+                                                    Icon(
+                                                      Icons.bar_chart,
+                                                      color: primaryColor,
+                                                      size: 18,
+                                                    ),
+                                                    const SizedBox(width: 8),
+                                                    const Text(
+                                                      '收入报告',
+                                                      style: TextStyle(
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                        fontSize: 13,
+                                                      ),
+                                                    ),
+                                                    const SizedBox(width: 2),
+                                                    const Icon(
+                                                      Icons.chevron_right,
+                                                      color: Colors.grey,
+                                                      size: 16,
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ),
+                                          ),
                                         ],
                                       );
                                     },
@@ -1296,57 +1325,6 @@ class _ProfileView extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-// ------------------------------------------------------------
-// 📊 收入报告按钮（仅对接过单的非雇主用户显示）
-// ------------------------------------------------------------
-class _IncomeReportButton extends StatelessWidget {
-  final String uid;
-  const _IncomeReportButton({required this.uid});
-
-  @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<QuerySnapshot>(
-      future: FirebaseFirestore.instance
-          .collection('tasks')
-          .where('acceptedUsers', arrayContains: uid)
-          .limit(1)
-          .get(),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return const SizedBox.shrink();
-        }
-        return InkWell(
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const IncomeDashboardPage()),
-          ),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.black12),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: const [
-                Text('📊', style: TextStyle(fontSize: 14)),
-                SizedBox(width: 8),
-                Text(
-                  '收入报告',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                ),
-                SizedBox(width: 4),
-                Icon(Icons.chevron_right, size: 14),
-              ],
-            ),
-          ),
-        );
-      },
     );
   }
 }
