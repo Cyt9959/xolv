@@ -18,7 +18,10 @@ import 'income_dashboard_page.dart';
 import 'receipt_page.dart';
 
 class MainSquarePage extends StatefulWidget {
-  const MainSquarePage({super.key, required int initialTab});
+  final int? initialTab;
+  final int? initialSubTab;
+
+  const MainSquarePage({super.key, this.initialTab, this.initialSubTab});
 
   @override
   State<MainSquarePage> createState() => _MainSquarePageState();
