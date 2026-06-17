@@ -12,18 +12,20 @@ import 'video_call_page.dart';
 
 class TaskChatPage extends StatefulWidget {
   final String taskId;
-  final String taskDescription;
-  final double amount;
-  final String currentUserRole; // 'employer' 或 'taker'
-  final String againstUid;
+  // 💡 以下参数均可选：不传时会在 initState 里用 taskId 自行查询 Firestore 补全
+  // （例如从推送通知点击跳转进来，事先并不知道这些细节）
+  final String? taskDescription;
+  final double? amount;
+  final String? currentUserRole; // 'employer' 或 'taker'
+  final String? againstUid;
 
   const TaskChatPage({
     super.key,
     required this.taskId,
-    required this.taskDescription,
-    required this.amount,
-    required this.currentUserRole,
-    required this.againstUid,
+    this.taskDescription,
+    this.amount,
+    this.currentUserRole,
+    this.againstUid,
   });
 
   @override
@@ -41,6 +43,13 @@ class _TaskChatPageState extends State<TaskChatPage> {
   String _otherPartyName = 'XOLV 伙伴';
   StreamSubscription<DocumentSnapshot>? _callSub;
 
+  // 💡 任务元数据：有 widget 参数就直接用，否则用 taskId 自行从 Firestore 拉取
+  bool _isLoadingTaskMeta = true;
+  String _taskDescription = '';
+  double _amount = 0;
+  String _currentUserRole = 'taker';
+  String _againstUid = '';
+
   // 💡 核心新增：专门为跑腿场景定制的常用快捷语
   final List<String> _quickPhrases = [
     '🚗 我已到达指定地点',
@@ -52,20 +61,70 @@ class _TaskChatPageState extends State<TaskChatPage> {
   @override
   void initState() {
     super.initState();
+    _initTaskMeta();
     _fetchMyLocation();
-    _fetchOtherPartyName();
+    _markAsRead();
+  }
+
+  // 💡 补全聊天室所需的任务元数据：优先用 widget 传入的参数，否则用 taskId 自行查询
+  Future<void> _initTaskMeta() async {
+    if (widget.taskDescription != null &&
+        widget.amount != null &&
+        widget.currentUserRole != null &&
+        widget.againstUid != null) {
+      _taskDescription = widget.taskDescription!;
+      _amount = widget.amount!;
+      _currentUserRole = widget.currentUserRole!;
+      _againstUid = widget.againstUid!;
+      if (mounted) setState(() => _isLoadingTaskMeta = false);
+      _fetchOtherPartyName();
+      return;
+    }
+
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('tasks')
+          .doc(widget.taskId)
+          .get();
+      final data = doc.data() ?? {};
+      final String publisherId = data['publisherId'] ?? '';
+      final List<dynamic> acceptedUsers = data['acceptedUsers'] ?? [];
+      final bool isPublisher = user != null && user!.uid == publisherId;
+
+      _taskDescription = data['description'] ?? '任务沟通';
+      _amount = double.tryParse(data['amount']?.toString() ?? '0') ?? 0;
+      _currentUserRole = isPublisher ? 'employer' : 'taker';
+      _againstUid = isPublisher
+          ? (acceptedUsers.isNotEmpty ? acceptedUsers.first.toString() : '')
+          : publisherId;
+    } catch (_) {
+    } finally {
+      if (mounted) setState(() => _isLoadingTaskMeta = false);
+      _fetchOtherPartyName();
+    }
+  }
+
+  // 👁️ 进入聊天室即视为已读，记录我最后读到的时间
+  Future<void> _markAsRead() async {
+    if (user == null) return;
+    await FirebaseFirestore.instance
+        .collection('tasks')
+        .doc(widget.taskId)
+        .update({'lastReadBy.${user!.uid}': FieldValue.serverTimestamp()});
   }
 
   // 🪪 拉取通话对象的实名/昵称，用于通话页面展示
   Future<void> _fetchOtherPartyName() async {
+    if (_againstUid.isEmpty) return;
     try {
       final doc = await FirebaseFirestore.instance
           .collection('users')
-          .doc(widget.againstUid)
+          .doc(_againstUid)
           .get();
       final data = doc.data();
-      final String name =
-          (data?['verifiedName'] ?? data?['name'] ?? '').toString().trim();
+      final String name = (data?['verifiedName'] ?? data?['name'] ?? '')
+          .toString()
+          .trim();
       if (name.isNotEmpty && mounted) {
         setState(() => _otherPartyName = name);
       }
@@ -80,7 +139,7 @@ class _TaskChatPageState extends State<TaskChatPage> {
     await callRef.set({
       'callerId': user!.uid,
       'callerName': user!.displayName ?? 'XOLV 用户',
-      'receiverId': widget.againstUid,
+      'receiverId': _againstUid,
       'receiverName': _otherPartyName,
       'taskId': widget.taskId,
       'type': type,
@@ -95,14 +154,20 @@ class _TaskChatPageState extends State<TaskChatPage> {
       if (status == 'rejected') {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('对方拒绝了通话'), backgroundColor: Colors.red),
+            const SnackBar(
+              content: Text('对方拒绝了通话'),
+              backgroundColor: Colors.red,
+            ),
           );
           Navigator.pop(context);
         }
       } else if (status == 'timeout') {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('对方无响应'), backgroundColor: Colors.orange),
+            const SnackBar(
+              content: Text('对方无响应'),
+              backgroundColor: Colors.orange,
+            ),
           );
           Navigator.pop(context);
         }
@@ -175,16 +240,22 @@ class _TaskChatPageState extends State<TaskChatPage> {
       _textController.clear();
     }
 
-    await FirebaseFirestore.instance
+    final taskRef = FirebaseFirestore.instance
         .collection('tasks')
-        .doc(widget.taskId)
-        .collection('messages')
-        .add({
-          'senderId': user!.uid,
-          'senderName': user!.displayName ?? 'XOLV 伙伴',
-          'text': text,
-          'createdAt': FieldValue.serverTimestamp(),
-        });
+        .doc(widget.taskId);
+
+    await taskRef.collection('messages').add({
+      'senderId': user!.uid,
+      'senderName': user!.displayName ?? 'XOLV 伙伴',
+      'text': text,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+
+    // 📛 同步更新最后发言时间 & 自己的已读时间，用于任务卡片未读小红点
+    await taskRef.update({
+      'lastMessageAt': FieldValue.serverTimestamp(),
+      'lastReadBy.${user!.uid}': FieldValue.serverTimestamp(),
+    });
   }
 
   // 📸 接单人上传完工证明照片（最多 3 张）
@@ -259,6 +330,12 @@ class _TaskChatPageState extends State<TaskChatPage> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoadingTaskMeta) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator(color: Colors.black)),
+      );
+    }
+
     return Scaffold(
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
@@ -269,7 +346,7 @@ class _TaskChatPageState extends State<TaskChatPage> {
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
             ),
             Text(
-              widget.taskDescription,
+              _taskDescription,
               style: const TextStyle(fontSize: 12, color: Colors.grey),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -306,10 +383,10 @@ class _TaskChatPageState extends State<TaskChatPage> {
                 MaterialPageRoute(
                   builder: (_) => RaiseDisputePage(
                     taskId: widget.taskId,
-                    taskDescription: widget.taskDescription,
-                    amount: widget.amount,
-                    currentUserRole: widget.currentUserRole,
-                    againstUid: widget.againstUid,
+                    taskDescription: _taskDescription,
+                    amount: _amount,
+                    currentUserRole: _currentUserRole,
+                    againstUid: _againstUid,
                   ),
                 ),
               );

@@ -35,12 +35,13 @@ class ReviewApplicationsPage extends StatelessWidget {
             ? 'in_progress'
             : 'pending';
 
-        // 更新主任务档案
+        // 更新主任务档案（同时把已处理的申请数 -1，未读 Badge 同步减少）
         transaction.update(taskRef, {
           'amount': proposedAmount, // 如果是谈判成功，自动修改为主价格；如果是普通抢单，保持原价不变
           'acceptedUsers': acceptedUsers,
           'acceptedCount': newAcceptedCount,
           'status': newStatus,
+          'pendingApplicationsCount': FieldValue.increment(-1),
         });
 
         // 将当前申请标记为已录用成功
@@ -74,6 +75,12 @@ class ReviewApplicationsPage extends StatelessWidget {
           .collection('applications')
           .doc(appId)
           .update({'status': 'rejected'});
+
+      // 📛 已处理一个待审核申请，未读 Badge 数 -1
+      await FirebaseFirestore.instance.collection('tasks').doc(taskId).update({
+        'pendingApplicationsCount': FieldValue.increment(-1),
+      });
+
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('已婉拒该申请'), backgroundColor: Colors.grey),

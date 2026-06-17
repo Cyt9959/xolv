@@ -128,8 +128,17 @@ https://cytxolv.com/task/$taskId
           .get();
 
       if (existingApp.docs.isNotEmpty) {
-        _showErrorDialog('您已经申请过这个任务啦，请耐心等待雇主审核录用！');
-        return;
+        // 检查是否所有历史申请都是被拒绝的，如果有 pending 或 approved 才真正拦截
+        final hasActiveApplication = existingApp.docs.any((doc) {
+          final status = (doc.data())['status'];
+          return status == 'pending' || status == 'approved';
+        });
+
+        if (hasActiveApplication) {
+          _showErrorDialog('您已经申请过这个任务啦，请耐心等待雇主审核录用！');
+          return;
+        }
+        // 如果都是 rejected 状态，允许继续往下走，重新申请
       }
 
       // ✅ 第 3 步：通过所有安检，弹出接单方式选择器
@@ -342,6 +351,12 @@ https://cytxolv.com/task/$taskId
             'status': 'pending',
             'appliedAt': FieldValue.serverTimestamp(),
           });
+
+      // 📛 新增一个待审核申请，未读 Badge 数 +1
+      await FirebaseFirestore.instance
+          .collection('tasks')
+          .doc(widget.taskId)
+          .update({'pendingApplicationsCount': FieldValue.increment(1)});
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

@@ -18,15 +18,79 @@ import 'income_dashboard_page.dart';
 import 'receipt_page.dart';
 
 class MainSquarePage extends StatefulWidget {
-  const MainSquarePage({super.key});
+  final int? initialTab; // 0=广场 1=发布 2=我的
+  final int? initialSubTab; // 在"我的"页面里，0=我的任务 1=我的委托
+
+  const MainSquarePage({super.key, this.initialTab, this.initialSubTab});
 
   @override
   State<MainSquarePage> createState() => _MainSquarePageState();
 }
 
 class _MainSquarePageState extends State<MainSquarePage> {
-  int _currentIndex = 0;
-  final List<Widget> _pages = [const _HomeView(), const _ProfileView()];
+  late int _currentIndex;
+  late final List<Widget> _pages;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentIndex = widget.initialTab ?? 0;
+    _pages = [
+      const _HomeView(),
+      _ProfileView(initialSubTab: widget.initialSubTab),
+    ];
+  }
+
+  // 📛 我的钱包/我的 Tab 未读 Badge：监听我发布的所有任务，累加 pendingApplicationsCount
+  Widget _buildProfileIcon() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return const Icon(Icons.person);
+
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('tasks')
+          .where('publisherId', isEqualTo: user.uid)
+          .snapshots(),
+      builder: (context, snapshot) {
+        int totalPending = 0;
+        if (snapshot.hasData) {
+          for (final doc in snapshot.data!.docs) {
+            final data = doc.data() as Map<String, dynamic>;
+            totalPending += ((data['pendingApplicationsCount'] ?? 0) as num)
+                .toInt();
+          }
+        }
+
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            const Icon(Icons.person),
+            if (totalPending > 0)
+              Positioned(
+                right: -6,
+                top: -6,
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: const BoxDecoration(
+                    color: Colors.red,
+                    shape: BoxShape.circle,
+                  ),
+                  constraints: const BoxConstraints(
+                    minWidth: 16,
+                    minHeight: 16,
+                  ),
+                  child: Text(
+                    totalPending > 99 ? '99+' : '$totalPending',
+                    style: const TextStyle(color: Colors.white, fontSize: 10),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -175,7 +239,7 @@ class _MainSquarePageState extends State<MainSquarePage> {
             ),
             label: '发布',
           ),
-          const BottomNavigationBarItem(icon: Icon(Icons.person), label: '我的'),
+          BottomNavigationBarItem(icon: _buildProfileIcon(), label: '我的'),
         ],
       ),
     );
@@ -792,7 +856,8 @@ class _TapScaleButtonState extends State<_TapScaleButton> {
 // 👤 个人大厅 (全自动档案显示版)
 // ------------------------------------------------------------
 class _ProfileView extends StatelessWidget {
-  const _ProfileView();
+  final int? initialSubTab; // 0=我的任务 1=我的委托
+  const _ProfileView({this.initialSubTab});
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
@@ -800,6 +865,7 @@ class _ProfileView extends StatelessWidget {
 
     return DefaultTabController(
       length: 2,
+      initialIndex: initialSubTab ?? 0,
       child: Scaffold(
         appBar: AppBar(
           title: const Text(
@@ -952,8 +1018,9 @@ class _ProfileView extends StatelessWidget {
                                             color: Colors.purple.withValues(
                                               alpha: 0.1,
                                             ),
-                                            borderRadius:
-                                                BorderRadius.circular(20),
+                                            borderRadius: BorderRadius.circular(
+                                              20,
+                                            ),
                                             border: Border.all(
                                               color: Colors.purple.withValues(
                                                 alpha: 0.3,
@@ -1131,13 +1198,18 @@ class _ProfileView extends StatelessWidget {
                                                       size: 18,
                                                     ),
                                                     const SizedBox(width: 6),
-                                                    Text(
-                                                      'RM ${balance.toStringAsFixed(2)}',
-                                                      style: const TextStyle(
-                                                        color: Colors.white,
-                                                        fontWeight:
-                                                            FontWeight.bold,
-                                                        fontSize: 15,
+                                                    Flexible(
+                                                      child: Text(
+                                                        'RM ${balance.toStringAsFixed(2)}',
+                                                        overflow: TextOverflow
+                                                            .ellipsis,
+                                                        maxLines: 1,
+                                                        style: const TextStyle(
+                                                          color: Colors.white,
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                          fontSize: 15,
+                                                        ),
                                                       ),
                                                     ),
                                                   ],
@@ -1166,8 +1238,7 @@ class _ProfileView extends StatelessWidget {
                                                   borderRadius:
                                                       BorderRadius.circular(16),
                                                   border: Border.all(
-                                                    color:
-                                                        Colors.grey.shade300,
+                                                    color: Colors.grey.shade300,
                                                   ),
                                                 ),
                                                 child: Row(
@@ -1180,12 +1251,17 @@ class _ProfileView extends StatelessWidget {
                                                       size: 18,
                                                     ),
                                                     const SizedBox(width: 8),
-                                                    const Text(
-                                                      '收入报告',
-                                                      style: TextStyle(
-                                                        fontWeight:
-                                                            FontWeight.bold,
-                                                        fontSize: 13,
+                                                    const Flexible(
+                                                      child: Text(
+                                                        '收入报告',
+                                                        overflow: TextOverflow
+                                                            .ellipsis,
+                                                        maxLines: 1,
+                                                        style: TextStyle(
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                          fontSize: 13,
+                                                        ),
                                                       ),
                                                     ),
                                                     const SizedBox(width: 2),
@@ -1271,12 +1347,17 @@ class _ProfileView extends StatelessWidget {
                                                 size: 16,
                                               ),
                                               const SizedBox(width: 8),
-                                              Text(
-                                                text,
-                                                style: TextStyle(
-                                                  color: textColor,
-                                                  fontWeight: FontWeight.bold,
-                                                  fontSize: 12,
+                                              Flexible(
+                                                child: Text(
+                                                  text,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  maxLines: 1,
+                                                  style: TextStyle(
+                                                    color: textColor,
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 12,
+                                                  ),
                                                 ),
                                               ),
                                               if (onTap != null)
@@ -1300,14 +1381,52 @@ class _ProfileView extends StatelessWidget {
                 },
               ),
             ),
-            TabBar(
-              labelColor: primaryColor,
-              indicatorColor: primaryColor,
-              unselectedLabelColor: Colors.grey,
-              tabs: const [
-                Tab(text: '我的任务'),
-                Tab(text: '我的委托'),
-              ],
+            StreamBuilder<QuerySnapshot>(
+              stream: user == null
+                  ? null
+                  : FirebaseFirestore.instance
+                        .collection('tasks')
+                        .where('publisherId', isEqualTo: user.uid)
+                        .snapshots(),
+              builder: (context, snapshot) {
+                bool hasAnyPending = false;
+                if (snapshot.hasData) {
+                  for (final doc in snapshot.data!.docs) {
+                    final data = doc.data() as Map<String, dynamic>;
+                    if (((data['pendingApplicationsCount'] ?? 0) as num) > 0) {
+                      hasAnyPending = true;
+                      break;
+                    }
+                  }
+                }
+
+                return TabBar(
+                  labelColor: primaryColor,
+                  indicatorColor: primaryColor,
+                  unselectedLabelColor: Colors.grey,
+                  tabs: [
+                    const Tab(text: '我的任务'),
+                    Tab(
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text('我的委托'),
+                          if (hasAnyPending)
+                            Container(
+                              margin: const EdgeInsets.only(left: 4),
+                              width: 8,
+                              height: 8,
+                              decoration: const BoxDecoration(
+                                color: Colors.red,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                );
+              },
             ),
             Expanded(
               child: TabBarView(
@@ -1322,6 +1441,33 @@ class _ProfileView extends StatelessWidget {
       ),
     );
   }
+}
+
+// 📛 判断某个任务是否有我未读的群聊消息（lastMessageAt > lastReadBy[currentUid]）
+bool _taskHasUnreadMessage(Map<String, dynamic> data, String currentUid) {
+  final lastMessageAt = data['lastMessageAt'];
+  if (lastMessageAt is! Timestamp) return false;
+  final lastReadBy = data['lastReadBy'] as Map<String, dynamic>?;
+  final myLastRead = lastReadBy?[currentUid];
+  if (myLastRead is! Timestamp) return true;
+  return lastMessageAt.compareTo(myLastRead) > 0;
+}
+
+// 📛 任务卡片右上角的未读消息小红点
+Widget _unreadMessageDot(Map<String, dynamic> data, String currentUid) {
+  if (!_taskHasUnreadMessage(data, currentUid)) return const SizedBox.shrink();
+  return Positioned(
+    top: 8,
+    right: 8,
+    child: Container(
+      width: 10,
+      height: 10,
+      decoration: const BoxDecoration(
+        color: Colors.red,
+        shape: BoxShape.circle,
+      ),
+    ),
+  );
 }
 
 // ------------------------------------------------------------
@@ -1558,7 +1704,8 @@ class _MyPostedTasksView extends StatelessWidget {
           .where('publisherId', isEqualTo: currentUid)
           .snapshots(),
       builder: (context, snapshot) {
-        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+        if (!snapshot.hasData)
+          return const Center(child: CircularProgressIndicator());
         final filteredDocs = snapshot.data!.docs.where((doc) {
           final status = (doc.data() as Map)['status'];
           return status != 'completed' && status != 'disputed_closed';
@@ -1588,188 +1735,209 @@ class _MyPostedTasksView extends StatelessWidget {
               statusColor = primaryColor;
             }
 
-            return Card(
-              margin: const EdgeInsets.only(bottom: 12),
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-                side: const BorderSide(color: Colors.black12),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8.0),
-                child: Column(
-                  children: [
-                    ListTile(
-                      title: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Card(
+                    margin: EdgeInsets.zero,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: const BorderSide(color: Colors.black12),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8.0),
+                      child: Column(
                         children: [
-                          Text(
-                            'RM ${data['amount']}',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF118C4F),
-                              fontSize: 18,
+                          ListTile(
+                            title: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  'RM ${data['amount']}',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF118C4F),
+                                    fontSize: 18,
+                                  ),
+                                ),
+                                Text(
+                                  statusText,
+                                  style: TextStyle(
+                                    color: statusColor,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
                             ),
-                          ),
-                          Text(
-                            statusText,
-                            style: TextStyle(
-                              color: statusColor,
-                              fontSize: 13,
-                              fontWeight: FontWeight.bold,
+                            subtitle: Padding(
+                              padding: const EdgeInsets.only(top: 6.0),
+                              child: Text(
+                                desc,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
+                            trailing: rawStatus == 'pending'
+                                ? IconButton(
+                                    icon: const Icon(
+                                      Icons.delete_outline,
+                                      color: Colors.redAccent,
+                                    ),
+                                    onPressed: () => showDialog(
+                                      context: context,
+                                      builder: (ctx) => AlertDialog(
+                                        title: const Text('确认取消任务？'),
+                                        content: const Text('押金将退回您的钱包。'),
+                                        actions: [
+                                          TextButton(
+                                            onPressed: () => Navigator.pop(ctx),
+                                            child: const Text('取消'),
+                                          ),
+                                          TextButton(
+                                            onPressed: () {
+                                              Navigator.pop(ctx);
+                                              _deleteTask(context, doc.id);
+                                            },
+                                            style: TextButton.styleFrom(
+                                              foregroundColor: Colors.red,
+                                            ),
+                                            child: const Text('确认删除'),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  )
+                                : null,
                           ),
+                          if (acceptedCount > 0 && rawStatus != 'completed')
+                            Padding(
+                              padding: const EdgeInsets.only(
+                                left: 16.0,
+                                right: 16.0,
+                                bottom: 8.0,
+                              ),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: OutlinedButton.icon(
+                                      icon: Icon(
+                                        Icons.forum_outlined,
+                                        size: 16,
+                                        color: primaryColor,
+                                      ),
+                                      label: Text(
+                                        '群聊沟通',
+                                        style: TextStyle(color: primaryColor),
+                                      ),
+                                      style: OutlinedButton.styleFrom(
+                                        side: BorderSide(color: primaryColor),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
+                                        ),
+                                      ),
+                                      onPressed: () => Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => TaskChatPage(
+                                            taskId: doc.id,
+                                            taskDescription: desc,
+                                            amount:
+                                                double.tryParse(
+                                                  data['amount']?.toString() ??
+                                                      '0',
+                                                ) ??
+                                                0,
+                                            currentUserRole: 'employer',
+                                            againstUid: acceptedUsers.isNotEmpty
+                                                ? acceptedUsers.first.toString()
+                                                : '',
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: _TapScaleButton(
+                                      child: ElevatedButton.icon(
+                                        icon: const Icon(
+                                          Icons.check_circle_outline,
+                                          size: 16,
+                                        ),
+                                        label: const Text('确认完工'),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.green,
+                                          foregroundColor: Colors.white,
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              8,
+                                            ),
+                                          ),
+                                        ),
+                                        onPressed: () =>
+                                            _showRatingAndCompleteDialog(
+                                              context,
+                                              doc.id,
+                                              acceptedUsers,
+                                              double.tryParse(
+                                                    data['amount']
+                                                            ?.toString() ??
+                                                        '0',
+                                                  ) ??
+                                                  0,
+                                              desc,
+                                              (data['urgentBonus'] ?? 0.0)
+                                                  .toDouble(),
+                                            ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          if (rawStatus == 'pending')
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16.0,
+                              ),
+                              child: Align(
+                                alignment: Alignment.centerLeft,
+                                child: TextButton.icon(
+                                  icon: Icon(
+                                    Icons.gavel,
+                                    size: 16,
+                                    color: primaryColor,
+                                  ),
+                                  label: Text(
+                                    '查看接单与谈判申请 >',
+                                    style: TextStyle(
+                                      color: primaryColor,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  onPressed: () => Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => ReviewApplicationsPage(
+                                        taskId: doc.id,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
                         ],
                       ),
-                      subtitle: Padding(
-                        padding: const EdgeInsets.only(top: 6.0),
-                        child: Text(
-                          desc,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      trailing: rawStatus == 'pending'
-                          ? IconButton(
-                              icon: const Icon(
-                                Icons.delete_outline,
-                                color: Colors.redAccent,
-                              ),
-                              onPressed: () => showDialog(
-                                context: context,
-                                builder: (ctx) => AlertDialog(
-                                  title: const Text('确认取消任务？'),
-                                  content: const Text('押金将退回您的钱包。'),
-                                  actions: [
-                                    TextButton(
-                                      onPressed: () => Navigator.pop(ctx),
-                                      child: const Text('取消'),
-                                    ),
-                                    TextButton(
-                                      onPressed: () {
-                                        Navigator.pop(ctx);
-                                        _deleteTask(context, doc.id);
-                                      },
-                                      style: TextButton.styleFrom(
-                                        foregroundColor: Colors.red,
-                                      ),
-                                      child: const Text('确认删除'),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            )
-                          : null,
                     ),
-                    if (acceptedCount > 0 && rawStatus != 'completed')
-                      Padding(
-                        padding: const EdgeInsets.only(
-                          left: 16.0,
-                          right: 16.0,
-                          bottom: 8.0,
-                        ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: OutlinedButton.icon(
-                                icon: Icon(
-                                  Icons.forum_outlined,
-                                  size: 16,
-                                  color: primaryColor,
-                                ),
-                                label: Text(
-                                  '群聊沟通',
-                                  style: TextStyle(color: primaryColor),
-                                ),
-                                style: OutlinedButton.styleFrom(
-                                  side: BorderSide(color: primaryColor),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                ),
-                                onPressed: () => Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => TaskChatPage(
-                                      taskId: doc.id,
-                                      taskDescription: desc,
-                                      amount:
-                                          double.tryParse(
-                                            data['amount']?.toString() ?? '0',
-                                          ) ??
-                                          0,
-                                      currentUserRole: 'employer',
-                                      againstUid: acceptedUsers.isNotEmpty
-                                          ? acceptedUsers.first.toString()
-                                          : '',
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: _TapScaleButton(
-                                child: ElevatedButton.icon(
-                                  icon: const Icon(
-                                    Icons.check_circle_outline,
-                                    size: 16,
-                                  ),
-                                  label: const Text('确认完工'),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.green,
-                                    foregroundColor: Colors.white,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                  ),
-                                  onPressed: () => _showRatingAndCompleteDialog(
-                                    context,
-                                    doc.id,
-                                    acceptedUsers,
-                                    double.tryParse(
-                                          data['amount']?.toString() ?? '0',
-                                        ) ??
-                                        0,
-                                    desc,
-                                    (data['urgentBonus'] ?? 0.0).toDouble(),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    if (rawStatus == 'pending')
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: TextButton.icon(
-                            icon: Icon(
-                              Icons.gavel,
-                              size: 16,
-                              color: primaryColor,
-                            ),
-                            label: Text(
-                              '查看接单与谈判申请 >',
-                              style: TextStyle(
-                                color: primaryColor,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            onPressed: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) =>
-                                    ReviewApplicationsPage(taskId: doc.id),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
+                  ),
+                  _unreadMessageDot(data, currentUid),
+                ],
               ),
             );
           }).toList(),
@@ -1795,7 +1963,8 @@ class _MyAcceptedTasksView extends StatelessWidget {
           .where('acceptedUsers', arrayContains: currentUid)
           .snapshots(),
       builder: (context, snapshot) {
-        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+        if (!snapshot.hasData)
+          return const Center(child: CircularProgressIndicator());
         final filteredDocs = snapshot.data!.docs.where((doc) {
           final status = (doc.data() as Map)['status'];
           return status != 'completed' && status != 'disputed_closed';
@@ -1811,97 +1980,113 @@ class _MyAcceptedTasksView extends StatelessWidget {
             final desc = data['description'] ?? '无描述';
             final bool isCompleted = taskStatus == 'completed';
 
-            return Card(
-              margin: const EdgeInsets.only(bottom: 12),
-              elevation: 0,
-              color: isCompleted
-                  ? Colors.grey[50]
-                  : primaryColor.withValues(alpha: 0.08),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-                side: BorderSide(
-                  color: isCompleted
-                      ? Colors.black12
-                      : primaryColor.withValues(alpha: 0.3),
-                ),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          'RM ${data['amount']}',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 18,
-                            color: Color(0xFF118C4F),
-                          ),
-                        ),
-                        Text(
-                          isCompleted ? '已完成 🥳' : '任务进行中 🏃',
-                          style: TextStyle(
-                            color: isCompleted ? Colors.green : primaryColor,
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    // 🚀 核心排版代码已重新梳理，绝不报错！
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        desc,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: isCompleted ? Colors.grey : Colors.black87,
-                          fontSize: 14,
-                        ),
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Card(
+                    margin: EdgeInsets.zero,
+                    elevation: 0,
+                    color: isCompleted
+                        ? Colors.grey[50]
+                        : primaryColor.withValues(alpha: 0.08),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: BorderSide(
+                        color: isCompleted
+                            ? Colors.black12
+                            : primaryColor.withValues(alpha: 0.3),
                       ),
                     ),
-                    if (!isCompleted) ...[
-                      const Divider(height: 24),
-                      _TapScaleButton(
-                        child: ElevatedButton.icon(
-                          icon: const Icon(Icons.chat_bubble_outline, size: 16),
-                          label: const Text(
-                            '进入任务群聊沟通',
-                            style: TextStyle(fontWeight: FontWeight.bold),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Column(
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'RM ${data['amount']}',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 18,
+                                  color: Color(0xFF118C4F),
+                                ),
+                              ),
+                              Text(
+                                isCompleted ? '已完成 🥳' : '任务进行中 🏃',
+                                style: TextStyle(
+                                  color: isCompleted
+                                      ? Colors.green
+                                      : primaryColor,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
                           ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: primaryColor,
-                            foregroundColor: Colors.white,
-                            minimumSize: const Size(double.infinity, 40),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
-                          onPressed: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => TaskChatPage(
-                                taskId: doc.id,
-                                taskDescription: desc,
-                                amount:
-                                    double.tryParse(
-                                      data['amount']?.toString() ?? '0',
-                                    ) ??
-                                    0,
-                                currentUserRole: 'taker',
-                                againstUid: data['publisherId'] ?? '',
+                          const SizedBox(height: 8),
+                          // 🚀 核心排版代码已重新梳理，绝不报错！
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              desc,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: isCompleted
+                                    ? Colors.grey
+                                    : Colors.black87,
+                                fontSize: 14,
                               ),
                             ),
                           ),
-                        ),
+                          if (!isCompleted) ...[
+                            const Divider(height: 24),
+                            _TapScaleButton(
+                              child: ElevatedButton.icon(
+                                icon: const Icon(
+                                  Icons.chat_bubble_outline,
+                                  size: 16,
+                                ),
+                                label: const Text(
+                                  '进入任务群聊沟通',
+                                  style: TextStyle(fontWeight: FontWeight.bold),
+                                ),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: primaryColor,
+                                  foregroundColor: Colors.white,
+                                  minimumSize: const Size(double.infinity, 40),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                ),
+                                onPressed: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => TaskChatPage(
+                                      taskId: doc.id,
+                                      taskDescription: desc,
+                                      amount:
+                                          double.tryParse(
+                                            data['amount']?.toString() ?? '0',
+                                          ) ??
+                                          0,
+                                      currentUserRole: 'taker',
+                                      againstUid: data['publisherId'] ?? '',
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
-                    ],
-                  ],
-                ),
+                    ),
+                  ),
+                  _unreadMessageDot(data, currentUid),
+                ],
               ),
             );
           }).toList(),

@@ -13,6 +13,7 @@ import 'intro_page.dart';
 import 'main_square_page.dart';
 import 'global_notification_radar.dart'; // 👈 完美引入我们刚造好的全局雷达
 import 'services/fcm_service.dart';
+import 'task_chat_page.dart';
 import 'task_detail_page.dart';
 
 // 🔗 全局导航键：让 Deep Link 等非 Widget 逻辑也能跳转页面
@@ -132,6 +133,61 @@ class _AuthGateState extends State<AuthGate> {
   void initState() {
     super.initState();
     _initDeepLinks();
+    _setupNotificationClickHandler();
+  }
+
+  // ==========================================
+  // 📨 通知点击智能跳转：处理 App 从后台/冷启动被通知唤醒的场景
+  // ==========================================
+  void _setupNotificationClickHandler() {
+    // App 在后台被点击打开时
+    FirebaseMessaging.onMessageOpenedApp.listen((message) {
+      _handleNotificationTap(message.data);
+    });
+
+    // App 完全关闭，从通知冷启动时
+    FirebaseMessaging.instance.getInitialMessage().then((message) {
+      if (message != null) {
+        _handleNotificationTap(message.data);
+      }
+    });
+  }
+
+  void _handleNotificationTap(Map<String, dynamic> data) {
+    final type = data['type'];
+    final taskId = data['taskId'];
+    if (taskId == null) return;
+
+    if (type == 'new_message' || type == 'application_approved') {
+      // 有人发消息 / 被录用 → 直接跳进任务聊天室
+      navigatorKey.currentState?.push(
+        MaterialPageRoute(builder: (_) => TaskChatPage(taskId: taskId)),
+      );
+    } else if (type == 'new_application') {
+      // 有人申请/谈价 → 跳到主页并切到"我的委托" Tab
+      navigatorKey.currentState?.pushAndRemoveUntil(
+        MaterialPageRoute(
+          builder: (_) => const MainSquarePage(initialTab: 2, initialSubTab: 1),
+        ),
+        (route) => false,
+      );
+    } else if (type == 'urgent_task') {
+      // 急单推送 → 跳到任务详情
+      FirebaseFirestore.instance.collection('tasks').doc(taskId).get().then((
+        doc,
+      ) {
+        if (doc.exists) {
+          navigatorKey.currentState?.push(
+            MaterialPageRoute(
+              builder: (_) => TaskDetailPage(
+                taskId: taskId,
+                taskData: doc.data() as Map<String, dynamic>,
+              ),
+            ),
+          );
+        }
+      });
+    }
   }
 
   @override
