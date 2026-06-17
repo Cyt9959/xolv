@@ -144,6 +144,58 @@ exports.onNewChatMessage = functions.firestore
   });
 
 // ==========================================
+// 📞 trigger：新通话邀请 -> 推送给接收方，30秒无应答自动 timeout
+// ==========================================
+exports.onCallCreated = functions.firestore
+  .document("calls/{callId}")
+  .onCreate(async (snap, context) => {
+    try {
+      const data = snap.data();
+      if (data.status !== "ringing") return;
+
+      // 获取接收方的 FCM token
+      const receiverDoc = await db.collection("users").doc(data.receiverId).get();
+      const token = receiverDoc.data()?.fcmToken;
+
+      if (token) {
+        const callType = data.type === "video" ? "视频" : "语音";
+
+        await messaging.send({
+          token,
+          notification: {
+            title: `📞 ${data.callerName} 来${callType}电话了`,
+            body: "点击接听",
+          },
+          data: {
+            type: "incoming_call",
+            callId: context.params.callId,
+            callerId: data.callerId,
+            callerName: data.callerName,
+            taskId: data.taskId,
+            callType: data.type,
+          },
+          android: {
+            priority: "high",
+            notification: {
+              priority: "max",
+              channelId: "xolv_calls",
+            },
+          },
+        });
+      }
+
+      // 30秒后自动 timeout（若接收方仍未响应）
+      await new Promise((resolve) => setTimeout(resolve, 30000));
+      const freshSnap = await snap.ref.get();
+      if (freshSnap.data()?.status === "ringing") {
+        await snap.ref.update({ status: "timeout" });
+      }
+    } catch (e) {
+      console.error("onCallCreated 出错:", e);
+    }
+  });
+
+// ==========================================
 // 🤖 AI 助手：润色任务描述（Google Gemini）
 // ==========================================
 exports.improveTaskDescription = onCall(async (request) => {

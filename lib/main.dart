@@ -8,6 +8,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:app_links/app_links.dart';
 import 'firebase_options.dart';
+import 'incoming_call_page.dart';
 import 'intro_page.dart';
 import 'main_square_page.dart';
 import 'global_notification_radar.dart'; // 👈 完美引入我们刚造好的全局雷达
@@ -120,6 +121,10 @@ class _AuthGateState extends State<AuthGate> {
   // 📨 防止 StreamBuilder 重建时重复注册推送监听
   static bool _fcmInitialized = false;
 
+  // 📞 防止 StreamBuilder 重建时重复注册来电监听
+  static bool _callListenerInitialized = false;
+  static StreamSubscription<QuerySnapshot>? _callListenerSub;
+
   final AppLinks _appLinks = AppLinks();
   StreamSubscription<Uri>? _linkSubscription;
 
@@ -133,6 +138,36 @@ class _AuthGateState extends State<AuthGate> {
   void dispose() {
     _linkSubscription?.cancel();
     super.dispose();
+  }
+
+  // ==========================================
+  // 📞 全局来电监听：只要登录就监听 calls 集合里发给自己的来电
+  // ==========================================
+  void _listenForIncomingCalls(String uid) {
+    _callListenerSub = FirebaseFirestore.instance
+        .collection('calls')
+        .where('receiverId', isEqualTo: uid)
+        .where('status', isEqualTo: 'ringing')
+        .snapshots()
+        .listen((snapshot) {
+          for (final change in snapshot.docChanges) {
+            if (change.type == DocumentChangeType.added) {
+              final data = change.doc.data();
+              if (data == null) continue;
+
+              navigatorKey.currentState?.push(
+                MaterialPageRoute(
+                  builder: (_) => IncomingCallPage(
+                    callId: change.doc.id,
+                    callerName: data['callerName'] ?? '未知用户',
+                    taskId: data['taskId'] ?? '',
+                    callType: data['type'] ?? 'voice',
+                  ),
+                ),
+              );
+            }
+          }
+        });
   }
 
   // ==========================================
@@ -195,6 +230,12 @@ class _AuthGateState extends State<AuthGate> {
             FcmService().listenForegroundMessages();
           }
 
+          // 📞 登录成功后立即注册全局来电监听（只注册一次）
+          if (!_callListenerInitialized) {
+            _callListenerInitialized = true;
+            _listenForIncomingCalls(snapshot.data!.uid);
+          }
+
           // 🚀 核心通电：在放行进入广场的一瞬间，在最外层套上我们的【全自动智能雷达】！
           // 这样不管用户后续是在逛广场、看个人中心还是在聊天，通知全天候畅通无阻！
           return const GlobalNotificationRadar(child: MainSquarePage());
@@ -202,6 +243,9 @@ class _AuthGateState extends State<AuthGate> {
 
         // 状态 3：什么都没扫到（新用户，或者点击了“退出登录”）
         _fcmInitialized = false;
+        _callListenerInitialized = false;
+        _callListenerSub?.cancel();
+        _callListenerSub = null;
         return const IntroPage(); // 🛑 乖乖去引导页/登录页
       },
     );

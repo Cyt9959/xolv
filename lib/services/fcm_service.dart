@@ -17,6 +17,14 @@ class FcmService {
     importance: Importance.high,
   );
 
+  // 📞 来电专属高优先级渠道（带铃声/震动的全屏来电提醒）
+  static const AndroidNotificationChannel _callChannel = AndroidNotificationChannel(
+    'xolv_calls',
+    'XOLV 通话邀请',
+    description: '语音/视频通话来电提醒',
+    importance: Importance.max,
+  );
+
   // ==========================================
   // 1. 获取并保存 FCM Token，监听刷新
   // ==========================================
@@ -58,11 +66,12 @@ class FcmService {
 
     await _localNotifications.initialize(initSettings);
 
-    await _localNotifications
+    final androidPlugin = _localNotifications
         .resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin
-        >()
-        ?.createNotificationChannel(_channel);
+        >();
+    await androidPlugin?.createNotificationChannel(_channel);
+    await androidPlugin?.createNotificationChannel(_callChannel);
   }
 
   // ==========================================

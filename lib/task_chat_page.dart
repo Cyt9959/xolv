@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -38,6 +39,7 @@ class _TaskChatPageState extends State<TaskChatPage> {
   double? _myLng;
   bool _isUploadingPhotos = false;
   String _otherPartyName = 'XOLV 伙伴';
+  StreamSubscription<DocumentSnapshot>? _callSub;
 
   // 💡 核心新增：专门为跑腿场景定制的常用快捷语
   final List<String> _quickPhrases = [
@@ -68,6 +70,76 @@ class _TaskChatPageState extends State<TaskChatPage> {
         setState(() => _otherPartyName = name);
       }
     } catch (_) {}
+  }
+
+  // 📞 发起通话：先在 Firestore 建立通话记录（触发对方来电推送），再进入通话界面
+  Future<void> _startCall(String type) async {
+    if (user == null) return;
+
+    final callRef = FirebaseFirestore.instance.collection('calls').doc();
+    await callRef.set({
+      'callerId': user!.uid,
+      'callerName': user!.displayName ?? 'XOLV 用户',
+      'receiverId': widget.againstUid,
+      'receiverName': _otherPartyName,
+      'taskId': widget.taskId,
+      'type': type,
+      'status': 'ringing',
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+
+    // 📡 监听对方是否接听
+    _callSub?.cancel();
+    _callSub = callRef.snapshots().listen((snap) {
+      final status = snap.data()?['status'];
+      if (status == 'rejected') {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('对方拒绝了通话'), backgroundColor: Colors.red),
+          );
+          Navigator.pop(context);
+        }
+      } else if (status == 'timeout') {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('对方无响应'), backgroundColor: Colors.orange),
+          );
+          Navigator.pop(context);
+        }
+      }
+    });
+
+    // 拨号方直接进入通话界面（等待对方接听）
+    if (!mounted) return;
+    if (type == 'video') {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => VideoCallPage(
+            channelName: widget.taskId,
+            callerName: user!.displayName ?? '我',
+            receiverName: _otherPartyName,
+          ),
+        ),
+      );
+    } else {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => VoiceCallPage(
+            channelName: widget.taskId,
+            callerName: user!.displayName ?? '我',
+            receiverName: _otherPartyName,
+          ),
+        ),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _callSub?.cancel();
+    super.dispose();
   }
 
   Future<void> _fetchMyLocation() async {
@@ -213,31 +285,13 @@ class _TaskChatPageState extends State<TaskChatPage> {
           IconButton(
             icon: const Icon(Icons.call, color: Colors.green),
             tooltip: '语音通话',
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => VoiceCallPage(
-                  channelName: widget.taskId,
-                  callerName: user?.displayName ?? 'XOLV 用户',
-                  receiverName: _otherPartyName,
-                ),
-              ),
-            ),
+            onPressed: () => _startCall('voice'),
           ),
           // 📹 视频通话
           IconButton(
             icon: const Icon(Icons.videocam, color: Color(0xFFFF5E00)),
             tooltip: '视频通话',
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => VideoCallPage(
-                  channelName: widget.taskId,
-                  callerName: user?.displayName ?? 'XOLV 用户',
-                  receiverName: _otherPartyName,
-                ),
-              ),
-            ),
+            onPressed: () => _startCall('video'),
           ),
           IconButton(
             icon: const Icon(
