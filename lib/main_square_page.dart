@@ -1211,8 +1211,8 @@ class _ProfileView extends StatelessWidget {
 
                                 const SizedBox(height: 12),
 
-                                // 🛡️ KYC 按钮
-                                if (user != null)
+                                // 🛡️ KYC 按钮（已认证通过则不显示，避免与头像绿框+蓝V重复）
+                                if (user != null && kycStatus != 'approved')
                                   Builder(
                                     builder: (context) {
                                       Color bgColor = Colors.green[50]!;
