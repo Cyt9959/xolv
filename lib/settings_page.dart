@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'how_it_works_page.dart';
+import 'history_page.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -180,6 +181,16 @@ class _SettingsPageState extends State<SettingsPage> {
 
           // 模块 2：通用设置
           _buildSectionTitle('通用与安全'),
+          ListTile(
+            leading: const Icon(Icons.history, color: Colors.blueGrey),
+            title: const Text('历史记录', style: TextStyle(fontWeight: FontWeight.w600)),
+            subtitle: const Text('查看已完成的任务和委托'),
+            trailing: const Icon(Icons.chevron_right, color: Colors.grey),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const HistoryPage()),
+            ),
+          ),
           ListTile(
             leading: Container(
               padding: const EdgeInsets.all(8),

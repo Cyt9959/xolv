@@ -1130,19 +1130,14 @@ class _ProfileView extends StatelessWidget {
                                                       color: Colors.white,
                                                       size: 18,
                                                     ),
-                                                    const SizedBox(width: 8),
-                                                    Flexible(
-                                                      child: Text(
-                                                        '我的钱包: RM ${balance.toStringAsFixed(2)}',
-                                                        style: const TextStyle(
-                                                          color: Colors.white,
-                                                          fontWeight:
-                                                              FontWeight.bold,
-                                                          fontSize: 13,
-                                                        ),
-                                                        overflow:
-                                                            TextOverflow
-                                                                .ellipsis,
+                                                    const SizedBox(width: 6),
+                                                    Text(
+                                                      'RM ${balance.toStringAsFixed(2)}',
+                                                      style: const TextStyle(
+                                                        color: Colors.white,
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                        fontSize: 15,
                                                       ),
                                                     ),
                                                   ],
@@ -1310,15 +1305,15 @@ class _ProfileView extends StatelessWidget {
               indicatorColor: primaryColor,
               unselectedLabelColor: Colors.grey,
               tabs: const [
-                Tab(text: '我的委托'),
                 Tab(text: '我的任务'),
+                Tab(text: '我的委托'),
               ],
             ),
             Expanded(
               child: TabBarView(
                 children: [
-                  _MyPostedTasksView(currentUid: user?.uid ?? ''),
                   _MyAcceptedTasksView(currentUid: user?.uid ?? ''),
+                  _MyPostedTasksView(currentUid: user?.uid ?? ''),
                 ],
               ),
             ),
@@ -1429,7 +1424,10 @@ class _MyPostedTasksView extends StatelessWidget {
                         FirebaseFirestore.instance
                             .collection('tasks')
                             .doc(taskId),
-                        {'status': 'completed'},
+                        {
+                          'status': 'completed',
+                          'completedAt': FieldValue.serverTimestamp(),
+                        },
                       );
                       final String titleDesc = description.length > 5
                           ? description.substring(0, 5)
@@ -1560,12 +1558,17 @@ class _MyPostedTasksView extends StatelessWidget {
           .where('publisherId', isEqualTo: currentUid)
           .snapshots(),
       builder: (context, snapshot) {
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return const Center(child: Text('暂无发布'));
+        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+        final filteredDocs = snapshot.data!.docs.where((doc) {
+          final status = (doc.data() as Map)['status'];
+          return status != 'completed' && status != 'disputed_closed';
+        }).toList();
+        if (filteredDocs.isEmpty) {
+          return const Center(child: Text('暂无进行中的委托'));
         }
         return ListView(
           padding: const EdgeInsets.all(16),
-          children: snapshot.data!.docs.map((doc) {
+          children: filteredDocs.map((doc) {
             final data = doc.data() as Map<String, dynamic>;
             final rawStatus = data['status'] ?? 'pending';
             final desc = data['description'] ?? '无描述';
@@ -1792,12 +1795,17 @@ class _MyAcceptedTasksView extends StatelessWidget {
           .where('acceptedUsers', arrayContains: currentUid)
           .snapshots(),
       builder: (context, snapshot) {
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return const Center(child: Text('暂无接单'));
+        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+        final filteredDocs = snapshot.data!.docs.where((doc) {
+          final status = (doc.data() as Map)['status'];
+          return status != 'completed' && status != 'disputed_closed';
+        }).toList();
+        if (filteredDocs.isEmpty) {
+          return const Center(child: Text('暂无进行中的任务'));
         }
         return ListView(
           padding: const EdgeInsets.all(16),
-          children: snapshot.data!.docs.map((doc) {
+          children: filteredDocs.map((doc) {
             final data = doc.data() as Map<String, dynamic>;
             final String taskStatus = data['status'] ?? 'pending';
             final desc = data['description'] ?? '无描述';
