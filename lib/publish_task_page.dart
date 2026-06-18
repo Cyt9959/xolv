@@ -6,10 +6,10 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:image_picker/image_picker.dart';
 import 'kyc_page.dart';
+import 'select_location_page.dart';
 
 class PublishTaskPage extends StatefulWidget {
   const PublishTaskPage({super.key});
@@ -38,8 +38,6 @@ class _PublishTaskPageState extends State<PublishTaskPage> {
   final ImagePicker _imagePicker = ImagePicker();
 
   bool _isLoading = false;
-  bool _isFetchingLocation = false;
-  bool _isGeocoding = false;
   bool _locationVerified = false;
   bool _isPriceSuggesting = false;
   bool _isUrgent = false;
@@ -93,109 +91,24 @@ class _PublishTaskPageState extends State<PublishTaskPage> {
     return '$_timeValue $_timeUnit';
   }
 
-  Future<void> _getCurrentLocation() async {
-    setState(() => _isFetchingLocation = true);
-    try {
-      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) throw '请先打开 GPS 定位服务！';
-      LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) throw '您拒绝了定位权限';
-      }
-      Position position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
+  Future<void> _openLocationPicker() async {
+    final result = await Navigator.push<Map<String, dynamic>>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SelectLocationPage(
+          initialLatitude: _latitude,
+          initialLongitude: _longitude,
         ),
-      );
-
-      List<Placemark> placemarks = await placemarkFromCoordinates(
-        position.latitude,
-        position.longitude,
-      );
-      String address = '';
-      if (placemarks.isNotEmpty) {
-        Placemark place = placemarks[0];
-        address = [
-          place.street,
-          place.subLocality,
-          place.locality,
-          place.administrativeArea,
-        ].where((e) => e != null && e.isNotEmpty).join(', ');
-      }
-
-      setState(() {
-        _latitude = position.latitude;
-        _longitude = position.longitude;
-        _locationController.text = address.isNotEmpty ? address : '已获取当前坐标';
-        _locationVerified = true;
-      });
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ 当前位置已锁定！'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString()), backgroundColor: Colors.red),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isFetchingLocation = false);
-    }
-  }
-
-  Future<void> _verifyRemoteAddress() async {
-    final address = _locationController.text.trim();
-    if (address.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('请先输入您想指定的城市或详细地址'),
-          backgroundColor: Colors.orange,
-        ),
-      );
-      return;
-    }
+      ),
+    );
+    if (result == null) return;
 
     setState(() {
-      _isGeocoding = true;
-      _locationVerified = false;
+      _locationController.text = result['address'] as String;
+      _latitude = result['latitude'] as double;
+      _longitude = result['longitude'] as double;
+      _locationVerified = true;
     });
-
-    try {
-      List<Location> locations = await locationFromAddress(address);
-      if (locations.isNotEmpty) {
-        setState(() {
-          _latitude = locations[0].latitude;
-          _longitude = locations[0].longitude;
-          _locationVerified = true;
-        });
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('✅ 异地雷达坐标已精准锁定！'),
-              backgroundColor: Colors.green,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('❌ 找不到该地址坐标，请尝试输入更详细的街道或城市名'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isGeocoding = false);
-    }
   }
 
   // ========================================
@@ -711,118 +624,75 @@ class _PublishTaskPageState extends State<PublishTaskPage> {
                   ),
                   const SizedBox(height: 24),
 
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: _locationVerified
-                          ? Colors.green[50]
-                          : Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: _locationVerified
-                            ? Colors.green
-                            : Colors.black12,
-                        width: _locationVerified ? 2 : 1,
-                      ),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              'task_location'.tr(),
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 15,
-                              ),
-                            ),
-                            TextButton.icon(
-                              icon: _isFetchingLocation
-                                  ? const SizedBox(
-                                      width: 14,
-                                      height: 14,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                      ),
-                                    )
-                                  : const Icon(
-                                      Icons.my_location,
-                                      size: 15,
-                                      color: Colors.blue,
-                                    ),
-                              label: const Text(
-                                '用我当前位置',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color: Colors.blue,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              onPressed: _getCurrentLocation,
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        TextField(
-                          controller: _locationController,
-                          onChanged: (val) {
-                            if (_locationVerified) {
-                              setState(() {
-                                _locationVerified = false;
-                                _latitude = null;
-                                _longitude = null;
-                              });
-                            }
-                          },
-                          decoration: InputDecoration(
-                            hintText: '或手动输入异地地址 (如: 父母家)',
-                            filled: true,
-                            fillColor: Colors.white,
-                            prefixIcon: const Icon(
-                              Icons.travel_explore,
-                              color: Colors.grey,
-                            ),
-                            suffixIcon: _isGeocoding
-                                ? const Padding(
-                                    padding: EdgeInsets.all(12),
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                : IconButton(
-                                    icon: Icon(
-                                      _locationVerified
-                                          ? Icons.check_circle
-                                          : Icons.search,
-                                      color: _locationVerified
-                                          ? Colors.green
-                                          : Colors.black,
-                                    ),
-                                    onPressed: _verifyRemoteAddress,
-                                  ),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide.none,
-                            ),
-                          ),
-                        ),
-                        if (_locationVerified)
-                          const Padding(
-                            padding: EdgeInsets.only(top: 8.0, left: 4),
-                            child: Text(
-                              '✅ 坐标已锁定！',
-                              style: TextStyle(
-                                color: Colors.green,
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                      ],
+                  Text(
+                    'task_location'.tr(),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
                     ),
                   ),
+                  const SizedBox(height: 8),
+                  InkWell(
+                    onTap: _openLocationPicker,
+                    borderRadius: BorderRadius.circular(16),
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: _locationVerified
+                            ? Colors.green[50]
+                            : Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: _locationVerified
+                              ? Colors.green
+                              : Colors.black12,
+                          width: _locationVerified ? 2 : 1,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.location_on,
+                            color: _locationVerified
+                                ? Colors.green
+                                : Colors.grey,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              _locationController.text.isEmpty
+                                  ? '点击在地图上选择委托执行地点'
+                                  : _locationController.text,
+                              style: TextStyle(
+                                color: _locationController.text.isEmpty
+                                    ? Colors.grey
+                                    : Colors.black,
+                                fontWeight: _locationController.text.isEmpty
+                                    ? FontWeight.normal
+                                    : FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          const Icon(
+                            Icons.chevron_right,
+                            color: Colors.grey,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  if (_locationVerified)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 8.0, left: 4),
+                      child: Text(
+                        '✅ 坐标已锁定！',
+                        style: TextStyle(
+                          color: Colors.green,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
                   const SizedBox(height: 24),
 
                   _buildCounterCard(
