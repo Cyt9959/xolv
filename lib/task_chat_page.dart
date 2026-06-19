@@ -798,6 +798,19 @@ class _TaskChatPageState extends State<TaskChatPage> {
                 child: SafeArea(
                   child: Row(
                     children: [
+                      IconButton(
+                        icon: _isUploadingMedia
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.add_circle_outline),
+                        color: _brandColor,
+                        onPressed: _isUploadingMedia ? null : _showMediaPicker,
+                      ),
                       Expanded(
                         child: TextField(
                           controller: _textController,
@@ -816,19 +829,6 @@ class _TaskChatPageState extends State<TaskChatPage> {
                           ),
                           onSubmitted: (_) => _sendMessage(),
                         ),
-                      ),
-                      IconButton(
-                        icon: _isUploadingMedia
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Icon(Icons.add_circle_outline),
-                        color: _brandColor,
-                        onPressed: _isUploadingMedia ? null : _showMediaPicker,
                       ),
                       CircleAvatar(
                         radius: 22,
