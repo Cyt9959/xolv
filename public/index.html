@@ -1,44 +1,620 @@
 <!DOCTYPE html>
 <html lang="zh">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>XOLV — 本地任务平台</title>
+  <title>XOLV — 本地任务撮合平台</title>
+  <meta name="description" content="马来西亚首个资金担保 P2P 任务平台。发布委托、即时接单、安全到账。"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;900&family=Inter:wght@400;500;600&display=swap" rel="stylesheet"/>
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --orange: #FF5E00;
+      --orange-dim: rgba(255,94,0,0.15);
+      --green: #118C4F;
+      --black: #080808;
+      --card: #111111;
+      --border: rgba(255,255,255,0.07);
+      --text: #F0F0F0;
+      --muted: rgba(240,240,240,0.45);
+    }
+
+    html { scroll-behavior: smooth; }
+
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      background: #fff;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      min-height: 100vh;
-      text-align: center;
-      padding: 24px;
+      font-family: 'Inter', sans-serif;
+      background: var(--black);
+      color: var(--text);
+      overflow-x: hidden;
     }
-    .logo { font-size: 48px; font-weight: 900; color: #FF5E00; letter-spacing: -2px; }
-    .tagline { color: #666; margin-top: 12px; font-size: 16px; }
-    .btn {
-      margin-top: 32px;
-      background: #FF5E00;
-      color: white;
-      padding: 16px 40px;
-      border-radius: 12px;
+
+    /* ───── NAV ───── */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 20px 40px;
+      background: rgba(8,8,8,0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-logo {
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 900;
+      font-size: 22px;
+      color: var(--orange);
+      letter-spacing: -0.5px;
+    }
+    .nav-cta {
+      background: var(--orange);
+      color: #fff;
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 700;
+      font-size: 13px;
+      padding: 10px 22px;
+      border-radius: 100px;
       text-decoration: none;
-      font-weight: bold;
-      font-size: 16px;
-      display: inline-block;
+      letter-spacing: 0.3px;
+      transition: opacity 0.2s;
     }
-    .sub { color: #999; font-size: 13px; margin-top: 16px; }
+    .nav-cta:hover { opacity: 0.85; }
+
+    /* ───── HERO ───── */
+    .hero {
+      min-height: 100vh;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      text-align: center;
+      padding: 120px 24px 80px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* Glow background */
+    .hero::before {
+      content: '';
+      position: absolute;
+      top: 50%; left: 50%;
+      width: 700px; height: 700px;
+      transform: translate(-50%, -60%);
+      background: radial-gradient(ellipse, rgba(255,94,0,0.18) 0%, transparent 70%);
+      animation: pulse 4s ease-in-out infinite;
+      pointer-events: none;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 0.6; transform: translate(-50%, -60%) scale(1); }
+      50% { opacity: 1; transform: translate(-50%, -60%) scale(1.15); }
+    }
+
+    /* Big bolt watermark */
+    .hero-bolt {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -55%);
+      font-size: clamp(200px, 40vw, 400px);
+      line-height: 1;
+      opacity: 0.045;
+      pointer-events: none;
+      user-select: none;
+    }
+
+    .hero-eyebrow {
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 700;
+      font-size: 11px;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: var(--orange);
+      margin-bottom: 24px;
+      position: relative;
+    }
+
+    .hero-title {
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 900;
+      font-size: clamp(52px, 11vw, 110px);
+      line-height: 0.95;
+      letter-spacing: -3px;
+      color: #fff;
+      position: relative;
+    }
+    .hero-title span { color: var(--orange); }
+
+    .hero-subtitle {
+      font-size: clamp(16px, 2.5vw, 20px);
+      color: var(--muted);
+      max-width: 520px;
+      margin: 28px auto 0;
+      line-height: 1.65;
+      position: relative;
+    }
+
+    .hero-actions {
+      display: flex; gap: 14px; flex-wrap: wrap;
+      justify-content: center;
+      margin-top: 48px;
+      position: relative;
+    }
+
+    .btn-primary {
+      display: inline-flex; align-items: center; gap: 10px;
+      background: var(--orange);
+      color: #fff;
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 800;
+      font-size: 15px;
+      padding: 16px 34px;
+      border-radius: 100px;
+      text-decoration: none;
+      transition: transform 0.15s, opacity 0.15s;
+      box-shadow: 0 0 40px rgba(255,94,0,0.35);
+    }
+    .btn-primary:hover { transform: translateY(-2px); opacity: 0.9; }
+    .btn-primary svg { width: 20px; height: 20px; }
+
+    .btn-secondary {
+      display: inline-flex; align-items: center; gap: 10px;
+      background: transparent;
+      color: var(--text);
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 700;
+      font-size: 15px;
+      padding: 16px 34px;
+      border-radius: 100px;
+      text-decoration: none;
+      border: 1.5px solid var(--border);
+      transition: border-color 0.2s;
+    }
+    .btn-secondary:hover { border-color: rgba(255,255,255,0.25); }
+
+    /* Stats strip */
+    .stats-strip {
+      position: relative;
+      display: flex; justify-content: center; gap: 0;
+      flex-wrap: wrap;
+      margin-top: 72px;
+    }
+    .stat {
+      padding: 0 40px;
+      text-align: center;
+      border-right: 1px solid var(--border);
+    }
+    .stat:last-child { border-right: none; }
+    .stat-num {
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 900;
+      font-size: 36px;
+      color: #fff;
+      letter-spacing: -1px;
+    }
+    .stat-num span { color: var(--orange); }
+    .stat-label {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 4px;
+      letter-spacing: 0.5px;
+    }
+
+    /* ───── HOW IT WORKS ───── */
+    section { padding: 100px 24px; }
+
+    .section-label {
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 700;
+      font-size: 11px;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: var(--orange);
+      text-align: center;
+      margin-bottom: 16px;
+    }
+    .section-title {
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 900;
+      font-size: clamp(32px, 5vw, 52px);
+      text-align: center;
+      letter-spacing: -1.5px;
+      line-height: 1.1;
+      max-width: 700px;
+      margin: 0 auto;
+    }
+    .section-title span { color: var(--orange); }
+
+    /* Flow steps */
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 2px;
+      max-width: 900px;
+      margin: 60px auto 0;
+      background: var(--border);
+      border-radius: 20px;
+      overflow: hidden;
+    }
+    .flow-step {
+      background: var(--card);
+      padding: 36px 28px;
+      position: relative;
+    }
+    .flow-step::after {
+      content: attr(data-arrow);
+      position: absolute;
+      top: 36px; right: -10px;
+      font-size: 18px;
+      color: var(--orange);
+      z-index: 1;
+    }
+    .flow-step:last-child::after { display: none; }
+    .flow-icon {
+      font-size: 32px;
+      margin-bottom: 16px;
+      display: block;
+    }
+    .flow-num {
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 900;
+      font-size: 11px;
+      color: var(--orange);
+      letter-spacing: 2px;
+      margin-bottom: 8px;
+    }
+    .flow-name {
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 800;
+      font-size: 17px;
+      margin-bottom: 8px;
+    }
+    .flow-desc {
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    /* ───── FEATURES ───── */
+    .features-section { background: #0C0C0C; }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+      max-width: 1000px;
+      margin: 60px auto 0;
+    }
+    .feature-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 32px;
+      transition: border-color 0.2s, transform 0.2s;
+    }
+    .feature-card:hover {
+      border-color: rgba(255,94,0,0.3);
+      transform: translateY(-3px);
+    }
+    .feature-card.highlight {
+      border-color: rgba(255,94,0,0.25);
+      background: linear-gradient(135deg, #111, #1a0a00);
+    }
+    .feature-icon {
+      width: 48px; height: 48px;
+      background: var(--orange-dim);
+      border-radius: 14px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px;
+      margin-bottom: 20px;
+    }
+    .feature-name {
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 800;
+      font-size: 17px;
+      margin-bottom: 10px;
+    }
+    .feature-desc {
+      font-size: 14px;
+      color: var(--muted);
+      line-height: 1.65;
+    }
+
+    /* ───── TRUST ───── */
+    .trust-row {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      max-width: 700px;
+      margin: 48px auto 0;
+    }
+    .trust-badge {
+      display: flex; align-items: center; gap: 8px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 100px;
+      padding: 10px 20px;
+      font-size: 13px;
+      color: var(--muted);
+      font-weight: 500;
+    }
+    .trust-badge .dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--green);
+      flex-shrink: 0;
+    }
+
+    /* ───── CTA SECTION ───── */
+    .cta-section {
+      text-align: center;
+      padding: 100px 24px;
+      position: relative;
+      overflow: hidden;
+    }
+    .cta-section::before {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 50%;
+      width: 600px; height: 300px;
+      transform: translateX(-50%);
+      background: radial-gradient(ellipse, rgba(255,94,0,0.12) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .cta-section .section-title { margin-bottom: 16px; }
+    .cta-subtitle {
+      color: var(--muted);
+      font-size: 17px;
+      max-width: 440px;
+      margin: 0 auto 40px;
+      line-height: 1.6;
+    }
+
+    /* Google Play Badge */
+    .play-badge {
+      display: inline-flex; align-items: center; gap: 14px;
+      background: #fff;
+      color: #000;
+      padding: 14px 28px;
+      border-radius: 14px;
+      text-decoration: none;
+      font-family: 'Montserrat', sans-serif;
+      transition: transform 0.15s, box-shadow 0.15s;
+      box-shadow: 0 4px 30px rgba(255,255,255,0.1);
+    }
+    .play-badge:hover { transform: translateY(-2px); box-shadow: 0 8px 40px rgba(255,255,255,0.15); }
+    .play-badge-icon { font-size: 28px; }
+    .play-badge-text { text-align: left; }
+    .play-badge-text .small { font-size: 10px; font-weight: 500; color: #555; letter-spacing: 0.3px; }
+    .play-badge-text .big { font-size: 18px; font-weight: 900; letter-spacing: -0.3px; }
+
+    /* ───── FOOTER ───── */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 40px 40px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .footer-logo {
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 900;
+      font-size: 18px;
+      color: var(--orange);
+    }
+    .footer-links {
+      display: flex; gap: 24px; flex-wrap: wrap;
+    }
+    .footer-links a {
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 13px;
+      transition: color 0.2s;
+    }
+    .footer-links a:hover { color: var(--text); }
+    .footer-copy {
+      font-size: 12px;
+      color: rgba(240,240,240,0.25);
+      width: 100%;
+      text-align: center;
+      margin-top: 8px;
+    }
+
+    /* ───── RESPONSIVE ───── */
+    @media (max-width: 640px) {
+      nav { padding: 16px 20px; }
+      .stat { padding: 0 20px; }
+      .flow { grid-template-columns: 1fr; }
+      .flow-step::after { display: none; }
+      footer { flex-direction: column; align-items: flex-start; }
+    }
   </style>
 </head>
 <body>
-  <div class="logo">⚡ XOLV</div>
-  <p class="tagline">本地任务撮合平台 · 马来西亚</p>
-  <a class="btn" href="https://play.google.com/store/apps/details?id=com.cyt.xolv">
-    下载 XOLV App
+
+<!-- NAV -->
+<nav>
+  <div class="nav-logo">⚡ XOLV</div>
+  <a href="#download" class="nav-cta">立即下载</a>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-bolt">⚡</div>
+
+  <div class="hero-eyebrow">马来西亚本地任务平台</div>
+
+  <h1 class="hero-title">
+    做不完<br/>
+    <span>发出去</span>
+  </h1>
+
+  <p class="hero-subtitle">
+    有任务？发布悬赏，附近的人帮你做。想赚钱？接单完工，即时到账。
+    资金由平台全程担保，双方实名认证，安心无忧。
+  </p>
+
+  <div class="hero-actions">
+    <a href="#download" class="btn-primary">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></svg>
+      免费下载 App
+    </a>
+    <a href="#how" class="btn-secondary">了解更多 →</a>
+  </div>
+
+  <div class="stats-strip">
+    <div class="stat">
+      <div class="stat-num">100<span>%</span></div>
+      <div class="stat-label">资金担保</div>
+    </div>
+    <div class="stat">
+      <div class="stat-num"><span>⚡</span> 即时</div>
+      <div class="stat-label">完工到账</div>
+    </div>
+    <div class="stat">
+      <div class="stat-num">双向</div>
+      <div class="stat-label">实名认证</div>
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section id="how">
+  <div class="section-label">运作方式</div>
+  <h2 class="section-title">简单到<span>三步</span>搞定</h2>
+
+  <div class="flow">
+    <div class="flow-step" data-arrow="→">
+      <span class="flow-icon">📝</span>
+      <div class="flow-num">STEP 01</div>
+      <div class="flow-name">发布委托</div>
+      <div class="flow-desc">描述你需要的帮助，设定地点和悬赏金额，平台安全冻结资金</div>
+    </div>
+    <div class="flow-step" data-arrow="→">
+      <span class="flow-icon">⚡</span>
+      <div class="flow-num">STEP 02</div>
+      <div class="flow-name">接单人抢单</div>
+      <div class="flow-desc">附近的认证接单人看到任务，直接抢单或谈价，你选最合适的录用</div>
+    </div>
+    <div class="flow-step" data-arrow="→">
+      <span class="flow-icon">✅</span>
+      <div class="flow-num">STEP 03</div>
+      <div class="flow-name">完工即到账</div>
+      <div class="flow-desc">确认任务完成，悬赏金自动打入接单人钱包，双方互相评分</div>
+    </div>
+    <div class="flow-step">
+      <span class="flow-icon">🔒</span>
+      <div class="flow-num">GUARANTEE</div>
+      <div class="flow-name">有纠纷？</div>
+      <div class="flow-desc">平台提供人工仲裁，公正裁决后自动放款，钱不会消失</div>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section class="features-section">
+  <div class="section-label">平台特色</div>
+  <h2 class="section-title">比想象中<span>更安全</span></h2>
+
+  <div class="features-grid">
+    <div class="feature-card highlight">
+      <div class="feature-icon">🔒</div>
+      <div class="feature-name">资金托管系统</div>
+      <div class="feature-desc">雇主发布任务时，悬赏金由平台安全冻结。任务未完成，钱不流动。这是 XOLV 最核心的承诺。</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">✅</div>
+      <div class="feature-name">大马卡实名认证</div>
+      <div class="feature-desc">所有用户须完成 MyKad 三步认证（IC 正反面 + 自拍），AI 自动提取姓名与年龄，平台人工审核。</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">⚡</div>
+      <div class="feature-name">完工即时到账</div>
+      <div class="feature-desc">不像 Foodpanda 要等周结算。雇主确认完工后，钱包余额立刻跳动。</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">💬</div>
+      <div class="feature-name">谈价系统</div>
+      <div class="feature-desc">接单人可以直接抢单，也可以提出自己的出价和留言，由雇主决定是否接受。</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">📞</div>
+      <div class="feature-name">语音 / 视频通话</div>
+      <div class="feature-desc">任务群聊内可发起语音或视频通话，沟通任务细节更清晰，无需切换到其他 app。</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🔥</div>
+      <div class="feature-name">急单模式</div>
+      <div class="feature-desc">标记为急单后，系统立刻推送给附近所有接单人。接单人额外获得 RM 2 奖励，响应速度更快。</div>
+    </div>
+  </div>
+
+  <div class="trust-row">
+    <div class="trust-badge"><span class="dot"></span> SSM 注册企业</div>
+    <div class="trust-badge"><span class="dot"></span> AI 辅助 KYC 验证</div>
+    <div class="trust-badge"><span class="dot"></span> 原子级交易锁定</div>
+    <div class="trust-badge"><span class="dot"></span> 人工仲裁保护</div>
+  </div>
+</section>
+
+<!-- ROLES -->
+<section>
+  <div class="section-label">适合所有人</div>
+  <h2 class="section-title">你是<span>雇主</span>还是<span>接单人</span>？</h2>
+
+  <div class="features-grid" style="margin-top:60px; max-width:700px;">
+    <div class="feature-card" style="border-color:rgba(255,94,0,0.2);">
+      <div class="feature-icon">👔</div>
+      <div class="feature-name">雇主</div>
+      <div class="feature-desc" style="color:var(--text); line-height:1.8;">
+        ✦ 需要跑腿、排队、搬运<br/>
+        ✦ 临时需要人手帮忙<br/>
+        ✦ 有事做不完想外包<br/>
+        ✦ 商家需要固定跑腿服务
+      </div>
+    </div>
+    <div class="feature-card" style="border-color:rgba(17,140,79,0.3);">
+      <div class="feature-icon">⚡</div>
+      <div class="feature-name">接单人</div>
+      <div class="feature-desc" style="color:var(--text); line-height:1.8;">
+        ✦ 学生想赚外快<br/>
+        ✦ 有空闲时间想利用<br/>
+        ✦ 想建立副业收入<br/>
+        ✦ 有特定技能可以变现
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- DOWNLOAD CTA -->
+<section class="cta-section" id="download">
+  <div class="section-label">现在开始</div>
+  <h2 class="section-title">准备好了吗？</h2>
+  <p class="cta-subtitle">免费注册，完成实名认证，马上开始发单或接单。双溪大年及周边地区首发。</p>
+
+  <a href="https://play.google.com/store/apps/details?id=com.example.xolv" class="play-badge">
+    <span class="play-badge-icon">▶</span>
+    <div class="play-badge-text">
+      <div class="small">GET IT ON</div>
+      <div class="big">Google Play</div>
+    </div>
   </a>
-  <p class="sub">已安装 App？点击上方链接即可打开任务详情</p>
+
+  <p style="margin-top:20px; font-size:13px; color:var(--muted);">Android 免费下载 · iOS 即将推出</p>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-logo">⚡ XOLV</div>
+  <div class="footer-links">
+    <a href="/privacy-policy.html">隐私政策</a>
+    <a href="/terms.html">使用条款</a>
+    <a href="mailto:chuitheen@gmail.com">联络我们</a>
+  </div>
+  <div class="footer-copy">
+    © 2026 CYT MODEATS ENTERPRISE (SSM Registered) · cytxolv.com · 马来西亚吉打州双溪大年
+  </div>
+</footer>
+
 </body>
 </html>

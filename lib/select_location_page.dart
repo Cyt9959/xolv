@@ -106,81 +106,92 @@ class _SelectLocationPageState extends State<SelectLocationPage> {
     return Scaffold(
       body: Stack(
         children: [
-          GoogleMap(
-            initialCameraPosition: CameraPosition(
-              target: _centerLatLng,
-              zoom: 16,
+          Positioned.fill(
+            child: GoogleMap(
+              initialCameraPosition: CameraPosition(
+                target: _centerLatLng,
+                zoom: 16,
+              ),
+              onMapCreated: (controller) {
+                _mapController = controller;
+                _resolveAddressFromCenter();
+              },
+              onCameraMove: _onCameraMove,
+              onCameraIdle: _onCameraIdle,
+              myLocationButtonEnabled: false,
+              zoomControlsEnabled: false,
             ),
-            onMapCreated: (controller) {
-              _mapController = controller;
-              _resolveAddressFromCenter();
-            },
-            onCameraMove: _onCameraMove,
-            onCameraIdle: _onCameraIdle,
-            myLocationButtonEnabled: false,
-            zoomControlsEnabled: false,
           ),
 
           // 📍 固定在屏幕正中的橙色 marker（地图移动，marker 不动）
-          const Center(
-            child: Padding(
-              padding: EdgeInsets.only(bottom: 36),
-              child: Icon(
-                Icons.location_pin,
-                color: Color(0xFFFF5E00),
-                size: 48,
+          const Positioned.fill(
+            child: Center(
+              child: Padding(
+                padding: EdgeInsets.only(bottom: 36),
+                child: Icon(
+                  Icons.location_pin,
+                  color: Color(0xFFFF5E00),
+                  size: 48,
+                ),
               ),
             ),
           ),
 
           // 🔎 顶部搜索框
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Row(
-                children: [
-                  Material(
-                    color: Colors.white,
-                    shape: const CircleBorder(),
-                    elevation: 2,
-                    child: IconButton(
-                      icon: const Icon(Icons.arrow_back),
-                      onPressed: () => Navigator.pop(context),
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Row(
+                  children: [
+                    Material(
+                      color: Colors.white,
+                      shape: const CircleBorder(),
+                      elevation: 2,
+                      child: IconButton(
+                        icon: const Icon(Icons.arrow_back),
+                        onPressed: () => Navigator.pop(context),
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: GooglePlaceAutoCompleteTextField(
-                      textEditingController: _searchController,
-                      googleAPIKey: _googleMapsApiKey,
-                      inputDecoration: InputDecoration(
-                        hintText: '搜索地址或地点',
-                        filled: true,
-                        fillColor: Colors.white,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: GooglePlaceAutoCompleteTextField(
+                        textEditingController: _searchController,
+                        googleAPIKey: _googleMapsApiKey,
+                        inputDecoration: InputDecoration(
+                          hintText: '搜索地址或地点',
+                          filled: true,
+                          fillColor: Colors.white,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
+                          ),
                         ),
+                        boxDecoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        isLatLngRequired: true,
+                        itemClick: (prediction) {
+                          _searchController.text = prediction.description ?? '';
+                        },
+                        getPlaceDetailWithLatLng: _onPlaceSelected,
                       ),
-                      boxDecoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      isLatLngRequired: true,
-                      itemClick: (prediction) {
-                        _searchController.text = prediction.description ?? '';
-                      },
-                      getPlaceDetailWithLatLng: _onPlaceSelected,
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
 
           // 📌 底部地址卡片 + 确认按钮
-          Align(
-            alignment: Alignment.bottomCenter,
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
             child: SafeArea(
               child: Container(
                 margin: const EdgeInsets.all(16),
