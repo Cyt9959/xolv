@@ -1,9 +1,12 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:share_plus/share_plus.dart';
 import 'publish_task_page.dart';
 import 'settings_page.dart';
@@ -1944,9 +1947,16 @@ class _MyPostedTasksView extends StatelessWidget {
 // ------------------------------------------------------------
 // 🏃‍♂️ 我的任务 (接单人视角) - 已彻底修复排版错误！
 // ------------------------------------------------------------
-class _MyAcceptedTasksView extends StatelessWidget {
+class _MyAcceptedTasksView extends StatefulWidget {
   final String currentUid;
   const _MyAcceptedTasksView({required this.currentUid});
+
+  @override
+  State<_MyAcceptedTasksView> createState() => _MyAcceptedTasksViewState();
+}
+
+class _MyAcceptedTasksViewState extends State<_MyAcceptedTasksView> {
+  final ImagePicker _picker = ImagePicker();
 
   @override
   Widget build(BuildContext context) {
@@ -1954,7 +1964,7 @@ class _MyAcceptedTasksView extends StatelessWidget {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('tasks')
-          .where('acceptedUsers', arrayContains: currentUid)
+          .where('acceptedUsers', arrayContains: widget.currentUid)
           .snapshots(),
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
@@ -1974,6 +1984,9 @@ class _MyAcceptedTasksView extends StatelessWidget {
             final String taskStatus = data['status'] ?? 'pending';
             final desc = data['description'] ?? '无描述';
             final bool isCompleted = taskStatus == 'completed';
+            final List<dynamic> acceptedUsers = data['acceptedUsers'] ?? [];
+            final bool hasCompletionPhotos =
+                (data['completionPhotos'] as List?)?.isNotEmpty == true;
 
             return Padding(
               padding: const EdgeInsets.only(bottom: 12),
@@ -2076,17 +2089,220 @@ class _MyAcceptedTasksView extends StatelessWidget {
                               ),
                             ),
                           ],
+                          if (taskStatus == 'in_progress' &&
+                              acceptedUsers.contains(widget.currentUid))
+                            Padding(
+                              padding: const EdgeInsets.only(top: 8),
+                              child: OutlinedButton.icon(
+                                icon: const Icon(Icons.camera_alt, size: 16),
+                                label: Text(
+                                  hasCompletionPhotos
+                                      ? '✅ 已上传证明（点击查看）'
+                                      : '📷 上传完工证明',
+                                  style: const TextStyle(fontSize: 13),
+                                ),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: hasCompletionPhotos
+                                      ? Colors.green
+                                      : primaryColor,
+                                  side: BorderSide(
+                                    color: hasCompletionPhotos
+                                        ? Colors.green
+                                        : primaryColor,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 8,
+                                  ),
+                                ),
+                                onPressed: () =>
+                                    _handleCompletionProof(context, doc.id, data),
+                              ),
+                            ),
                         ],
                       ),
                     ),
                   ),
-                  _unreadMessageDot(data, currentUid),
+                  _unreadMessageDot(data, widget.currentUid),
                 ],
               ),
             );
           }).toList(),
         );
       },
+    );
+  }
+
+  // 📷 接单人完工证明：已有照片时先弹出查看/新增选项，否则直接进入上传流程
+  Future<void> _handleCompletionProof(
+    BuildContext context,
+    String taskId,
+    Map<String, dynamic> data,
+  ) async {
+    final existingPhotos = List<String>.from(data['completionPhotos'] ?? []);
+
+    if (existingPhotos.isNotEmpty) {
+      showModalBottomSheet(
+        context: context,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        builder: (ctx) => SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: Text(
+                  '完工证明',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+              ),
+              SizedBox(
+                height: 120,
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  itemCount: existingPhotos.length,
+                  itemBuilder: (ctx, i) => GestureDetector(
+                    onTap: () =>
+                        _showFullProofImage(context, existingPhotos[i]),
+                    child: Container(
+                      width: 100,
+                      height: 100,
+                      margin: const EdgeInsets.only(right: 8),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(10),
+                        image: DecorationImage(
+                          image: NetworkImage(existingPhotos[i]),
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              if (existingPhotos.length < 5)
+                ListTile(
+                  leading: const Icon(Icons.add_a_photo),
+                  title: const Text('再上传一张'),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _uploadCompletionPhoto(taskId, existingPhotos);
+                  },
+                ),
+              const SizedBox(height: 16),
+            ],
+          ),
+        ),
+      );
+    } else {
+      _uploadCompletionPhoto(taskId, existingPhotos);
+    }
+  }
+
+  Future<void> _uploadCompletionPhoto(
+    String taskId,
+    List<String> existing,
+  ) async {
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.camera_alt),
+              title: const Text('立即拍照'),
+              onTap: () async {
+                Navigator.pop(ctx);
+                final file = await _picker.pickImage(
+                  source: ImageSource.camera,
+                  imageQuality: 80,
+                );
+                if (file != null) _saveProofPhoto(taskId, file.path, existing);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library),
+              title: const Text('从相册选择'),
+              onTap: () async {
+                Navigator.pop(ctx);
+                final file = await _picker.pickImage(
+                  source: ImageSource.gallery,
+                  imageQuality: 80,
+                );
+                if (file != null) _saveProofPhoto(taskId, file.path, existing);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _saveProofPhoto(
+    String taskId,
+    String filePath,
+    List<String> existing,
+  ) async {
+    try {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('上传中...')),
+      );
+
+      final ref = FirebaseStorage.instance.ref().child(
+        'completion_photos/$taskId/${DateTime.now().millisecondsSinceEpoch}.jpg',
+      );
+      await ref.putFile(File(filePath));
+      final url = await ref.getDownloadURL();
+
+      final updatedPhotos = [...existing, url];
+      await FirebaseFirestore.instance.collection('tasks').doc(taskId).update({
+        'completionPhotos': updatedPhotos,
+        'completionPhotoUploadedAt': FieldValue.serverTimestamp(),
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✅ 完工证明已上传！'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('上传失败: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  void _showFullProofImage(BuildContext context, String url) {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black87,
+      builder: (ctx) => Stack(
+        children: [
+          InteractiveViewer(child: Center(child: Image.network(url))),
+          Positioned(
+            top: 40,
+            right: 16,
+            child: IconButton(
+              icon: const Icon(Icons.close, color: Colors.white, size: 32),
+              onPressed: () => Navigator.pop(ctx),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

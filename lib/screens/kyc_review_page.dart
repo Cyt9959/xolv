@@ -498,6 +498,190 @@ class KycReviewPage extends StatelessWidget {
               },
             ),
           ),
+          const Divider(height: 1, thickness: 1),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+            child: Row(
+              children: [
+                Icon(Icons.verified, color: primaryColor),
+                const SizedBox(width: 8),
+                const Text(
+                  '完工证明审查',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: StreamBuilder<QuerySnapshot>(
+              // 📸 实时监听：状态为 'in_progress' 且已上传完工证明照片的任务
+              stream: FirebaseFirestore.instance
+                  .collection('tasks')
+                  .where('status', isEqualTo: 'in_progress')
+                  .where('completionPhotos', isNotEqualTo: [])
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(
+                    child: CircularProgressIndicator(color: primaryColor),
+                  );
+                }
+
+                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                  return const Center(
+                    child: Text(
+                      '暂无待审查的完工证明',
+                      style: TextStyle(color: Colors.grey, fontSize: 13),
+                    ),
+                  );
+                }
+
+                final docs = snapshot.data!.docs;
+
+                return ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  itemCount: docs.length,
+                  itemBuilder: (context, index) {
+                    final doc = docs[index];
+                    final data = doc.data() as Map<String, dynamic>;
+                    final String desc = (data['description'] ?? '').toString();
+                    final String shortDesc = desc.length > 30
+                        ? '${desc.substring(0, 30)}...'
+                        : desc;
+                    final List<dynamic> acceptedUsers =
+                        data['acceptedUsers'] ?? [];
+                    final String takerUid = acceptedUsers.isNotEmpty
+                        ? acceptedUsers.first.toString()
+                        : '';
+                    final List<dynamic> photos = data['completionPhotos'] ?? [];
+                    final bool reviewed = data['completionReviewed'] == true;
+
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      elevation: 0,
+                      color: Colors.white,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.black12),
+                        ),
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              shortDesc.isEmpty ? '任务沟通' : shortDesc,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            if (takerUid.isNotEmpty)
+                              FutureBuilder<DocumentSnapshot>(
+                                future: FirebaseFirestore.instance
+                                    .collection('users')
+                                    .doc(takerUid)
+                                    .get(),
+                                builder: (context, userSnap) {
+                                  String name = '加载中...';
+                                  if (userSnap.hasData &&
+                                      userSnap.data!.exists) {
+                                    final userData =
+                                        userSnap.data!.data()
+                                            as Map<String, dynamic>;
+                                    name =
+                                        (userData['verifiedName'] ??
+                                                userData['name'] ??
+                                                '未知用户')
+                                            .toString();
+                                  }
+                                  return Text(
+                                    '接单人: $name',
+                                    style: const TextStyle(
+                                      color: Colors.grey,
+                                      fontSize: 12,
+                                    ),
+                                  );
+                                },
+                              ),
+                            const SizedBox(height: 8),
+                            SizedBox(
+                              height: 90,
+                              child: ListView.builder(
+                                scrollDirection: Axis.horizontal,
+                                itemCount: photos.length,
+                                itemBuilder: (ctx, i) => GestureDetector(
+                                  onTap: () => _showFullImage(
+                                    context,
+                                    photos[i].toString(),
+                                  ),
+                                  child: Container(
+                                    width: 90,
+                                    height: 90,
+                                    margin: const EdgeInsets.only(right: 8),
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(8),
+                                      image: DecorationImage(
+                                        image: NetworkImage(
+                                          photos[i].toString(),
+                                        ),
+                                        fit: BoxFit.cover,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            reviewed
+                                ? Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Colors.green[50],
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: const Text(
+                                      '✅ 已审查',
+                                      style: TextStyle(
+                                        color: Colors.green,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  )
+                                : OutlinedButton.icon(
+                                    icon: const Icon(
+                                      Icons.task_alt,
+                                      size: 16,
+                                    ),
+                                    label: const Text('标记已审查'),
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: primaryColor,
+                                      side: const BorderSide(
+                                        color: primaryColor,
+                                      ),
+                                    ),
+                                    onPressed: () => doc.reference.update({
+                                      'completionReviewed': true,
+                                    }),
+                                  ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
         ],
       ),
     );

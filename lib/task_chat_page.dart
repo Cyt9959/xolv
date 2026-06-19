@@ -6,6 +6,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:video_player/video_player.dart';
 import 'raise_dispute_page.dart';
 import 'voice_call_page.dart';
 import 'video_call_page.dart';
@@ -39,9 +40,12 @@ class _TaskChatPageState extends State<TaskChatPage> {
 
   double? _myLat;
   double? _myLng;
-  bool _isUploadingPhotos = false;
+  bool _isUploadingMedia = false;
   String _otherPartyName = 'XOLV 伙伴';
   StreamSubscription<DocumentSnapshot>? _callSub;
+
+  // 🎨 聊天室拍照/拍视频功能的强调色
+  static const Color _brandColor = Color(0xFFFF5E00);
 
   // 💡 任务元数据：有 widget 参数就直接用，否则用 taskId 自行从 Firestore 拉取
   bool _isLoadingTaskMeta = true;
@@ -258,59 +262,6 @@ class _TaskChatPageState extends State<TaskChatPage> {
     });
   }
 
-  // 📸 接单人上传完工证明照片（最多 3 张）
-  Future<void> _uploadCompletionPhotos() async {
-    if (user == null) return;
-
-    final List<XFile> images = await _picker.pickMultiImage(
-      imageQuality: 70,
-      limit: 3,
-    );
-    if (images.isEmpty) return;
-
-    setState(() => _isUploadingPhotos = true);
-
-    try {
-      final storageRef = FirebaseStorage.instance
-          .ref()
-          .child('completion_photos')
-          .child(widget.taskId)
-          .child(user!.uid);
-
-      final List<String> urls = [];
-      for (int i = 0; i < images.length; i++) {
-        final photoRef = storageRef.child('photo_$i.jpg');
-        await photoRef.putFile(File(images[i].path));
-        urls.add(await photoRef.getDownloadURL());
-      }
-
-      await FirebaseFirestore.instance
-          .collection('tasks')
-          .doc(widget.taskId)
-          .update({
-            'completionPhotos': urls,
-            'completionPhotoUploadedAt': FieldValue.serverTimestamp(),
-          });
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ 完工证明照片已上传！'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('上传失败: $e'), backgroundColor: Colors.red),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isUploadingPhotos = false);
-    }
-  }
-
   // 🖼️ 点击放大查看图片
   void _openPhotoViewer(String url) {
     showDialog(
@@ -326,6 +277,266 @@ class _TaskChatPageState extends State<TaskChatPage> {
         ),
       ),
     );
+  }
+
+  // ➕ 弹出媒体选择面板：拍照 / 拍视频 / 从相册选择
+  void _showMediaPicker() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: _brandColor.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.camera_alt, color: _brandColor),
+                ),
+                title: const Text(
+                  '拍照',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+                subtitle: const Text('立即拍摄一张照片'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _pickChatMedia(ImageSource.camera, isVideo: false);
+                },
+              ),
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.purple.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.videocam, color: Colors.purple),
+                ),
+                title: const Text(
+                  '拍视频',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+                subtitle: const Text('录制一段视频（最长 60 秒）'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _pickChatMedia(ImageSource.camera, isVideo: true);
+                },
+              ),
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.photo_library, color: Colors.blue),
+                ),
+                title: const Text(
+                  '从相册选择',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+                subtitle: const Text('选取照片或视频'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _showGalleryPicker();
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // 🖼️ 从相册中选择图片或视频
+  void _showGalleryPicker() {
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.image),
+              title: const Text('选择照片'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _pickChatMedia(ImageSource.gallery, isVideo: false);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.video_library),
+              title: const Text('选择视频'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _pickChatMedia(ImageSource.gallery, isVideo: true);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // 📤 拍摄/选取一段聊天媒体（图片或视频），上传后写入消息
+  Future<void> _pickChatMedia(ImageSource source, {required bool isVideo}) async {
+    if (user == null) return;
+
+    XFile? file;
+    if (isVideo) {
+      file = await _picker.pickVideo(
+        source: source,
+        maxDuration: const Duration(seconds: 60),
+      );
+    } else {
+      file = await _picker.pickImage(source: source, imageQuality: 80);
+    }
+    if (file == null) return;
+    if (!mounted) return;
+
+    setState(() => _isUploadingMedia = true);
+
+    try {
+      final ext = isVideo ? 'mp4' : 'jpg';
+      final fileName = '${DateTime.now().millisecondsSinceEpoch}.$ext';
+      final storageRef = FirebaseStorage.instance
+          .ref()
+          .child('chat_media')
+          .child(widget.taskId)
+          .child(fileName);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(isVideo ? '📹 视频上传中...' : '📷 图片上传中...'),
+          duration: const Duration(seconds: 30),
+        ),
+      );
+
+      await storageRef.putFile(File(file.path));
+      final downloadUrl = await storageRef.getDownloadURL();
+
+      final taskRef = FirebaseFirestore.instance
+          .collection('tasks')
+          .doc(widget.taskId);
+
+      await taskRef.collection('messages').add({
+        'senderId': user!.uid,
+        'senderName': user!.displayName ?? 'XOLV 伙伴',
+        'type': isVideo ? 'video' : 'image',
+        'mediaUrl': downloadUrl,
+        'text': isVideo ? '[视频]' : '[图片]',
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+      await taskRef.update({
+        'lastMessageAt': FieldValue.serverTimestamp(),
+        'lastReadBy.${user!.uid}': FieldValue.serverTimestamp(),
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(isVideo ? '✅ 视频已发送' : '✅ 图片已发送'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('上传失败: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isUploadingMedia = false);
+    }
+  }
+
+  // 🎬 全屏播放聊天视频
+  void _openVideoPlayer(String url) {
+    final controller = VideoPlayerController.networkUrl(Uri.parse(url));
+    showDialog(
+      context: context,
+      barrierColor: Colors.black,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            controller.initialize().then((_) {
+              setDialogState(() {});
+              controller.play();
+            });
+            return Stack(
+              children: [
+                Center(
+                  child: AspectRatio(
+                    aspectRatio: controller.value.isInitialized
+                        ? controller.value.aspectRatio
+                        : 16 / 9,
+                    child: controller.value.isInitialized
+                        ? VideoPlayer(controller)
+                        : const Center(
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                            ),
+                          ),
+                  ),
+                ),
+                Positioned(
+                  top: 40,
+                  right: 16,
+                  child: IconButton(
+                    icon: const Icon(
+                      Icons.close,
+                      color: Colors.white,
+                      size: 32,
+                    ),
+                    onPressed: () {
+                      controller.dispose();
+                      Navigator.pop(ctx);
+                    },
+                  ),
+                ),
+                if (controller.value.isInitialized)
+                  Positioned(
+                    bottom: 40,
+                    left: 0,
+                    right: 0,
+                    child: Center(
+                      child: IconButton(
+                        icon: Icon(
+                          controller.value.isPlaying
+                              ? Icons.pause
+                              : Icons.play_arrow,
+                          color: Colors.white,
+                          size: 48,
+                        ),
+                        onPressed: () {
+                          setDialogState(() {
+                            controller.value.isPlaying
+                                ? controller.pause()
+                                : controller.play();
+                          });
+                        },
+                      ),
+                    ),
+                  ),
+              ],
+            );
+          },
+        );
+      },
+    ).then((_) => controller.dispose());
   }
 
   @override
@@ -428,11 +639,8 @@ class _TaskChatPageState extends State<TaskChatPage> {
             }
           }
 
-          final List<dynamic> acceptedUsers = taskData['acceptedUsers'] ?? [];
           final List<dynamic> completionPhotos =
               taskData['completionPhotos'] ?? [];
-          final bool canUploadPhotos =
-              user != null && acceptedUsers.contains(user!.uid);
 
           return Column(
             children: [
@@ -525,6 +733,8 @@ class _TaskChatPageState extends State<TaskChatPage> {
                         return _buildChatBubble(
                           name: data['senderName'] ?? '未知',
                           text: data['text'] ?? '',
+                          type: data['type'] ?? 'text',
+                          mediaUrl: data['mediaUrl'],
                           isMe: data['senderId'] == user?.uid,
                         );
                       },
@@ -588,22 +798,6 @@ class _TaskChatPageState extends State<TaskChatPage> {
                 child: SafeArea(
                   child: Row(
                     children: [
-                      if (canUploadPhotos)
-                        IconButton(
-                          icon: _isUploadingPhotos
-                              ? const SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : const Icon(Icons.camera_alt_outlined),
-                          tooltip: '上传完工证明照片',
-                          onPressed: _isUploadingPhotos
-                              ? null
-                              : _uploadCompletionPhotos,
-                        ),
                       Expanded(
                         child: TextField(
                           controller: _textController,
@@ -623,7 +817,19 @@ class _TaskChatPageState extends State<TaskChatPage> {
                           onSubmitted: (_) => _sendMessage(),
                         ),
                       ),
-                      const SizedBox(width: 8),
+                      IconButton(
+                        icon: _isUploadingMedia
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.add_circle_outline),
+                        color: _brandColor,
+                        onPressed: _isUploadingMedia ? null : _showMediaPicker,
+                      ),
                       CircleAvatar(
                         radius: 22,
                         backgroundColor: Colors.black,
@@ -651,7 +857,91 @@ class _TaskChatPageState extends State<TaskChatPage> {
     required String name,
     required String text,
     required bool isMe,
+    String type = 'text',
+    String? mediaUrl,
   }) {
+    Widget content;
+    if (type == 'image' && mediaUrl != null) {
+      content = GestureDetector(
+        onTap: () => _openPhotoViewer(mediaUrl),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: Image.network(
+            mediaUrl,
+            width: 200,
+            height: 200,
+            fit: BoxFit.cover,
+            loadingBuilder: (ctx, child, progress) => progress == null
+                ? child
+                : const SizedBox(
+                    width: 200,
+                    height: 200,
+                    child: Center(child: CircularProgressIndicator()),
+                  ),
+          ),
+        ),
+      );
+    } else if (type == 'video' && mediaUrl != null) {
+      content = GestureDetector(
+        onTap: () => _openVideoPlayer(mediaUrl),
+        child: Container(
+          width: 200,
+          height: 150,
+          decoration: BoxDecoration(
+            color: Colors.black,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: const BoxDecoration(
+                  color: Colors.white24,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.play_arrow,
+                  color: Colors.white,
+                  size: 32,
+                ),
+              ),
+              const Positioned(
+                bottom: 8,
+                left: 12,
+                child: Text(
+                  '▶ 点击播放视频',
+                  style: TextStyle(color: Colors.white70, fontSize: 11),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    } else {
+      content = Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: isMe ? Colors.black : Colors.white,
+          border: isMe ? null : Border.all(color: Colors.black12),
+          borderRadius: BorderRadius.only(
+            topLeft: const Radius.circular(16),
+            topRight: const Radius.circular(16),
+            bottomLeft: Radius.circular(isMe ? 16 : 0),
+            bottomRight: Radius.circular(isMe ? 0 : 16),
+          ),
+        ),
+        child: Text(
+          text,
+          style: TextStyle(
+            color: isMe ? Colors.white : Colors.black87,
+            fontSize: 15,
+            height: 1.3,
+          ),
+        ),
+      );
+    }
+
     return Align(
       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
@@ -671,27 +961,7 @@ class _TaskChatPageState extends State<TaskChatPage> {
                 style: const TextStyle(fontSize: 11, color: Colors.grey),
               ),
             ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: isMe ? Colors.black : Colors.white,
-                border: isMe ? null : Border.all(color: Colors.black12),
-                borderRadius: BorderRadius.only(
-                  topLeft: const Radius.circular(16),
-                  topRight: const Radius.circular(16),
-                  bottomLeft: Radius.circular(isMe ? 16 : 0),
-                  bottomRight: Radius.circular(isMe ? 0 : 16),
-                ),
-              ),
-              child: Text(
-                text,
-                style: TextStyle(
-                  color: isMe ? Colors.white : Colors.black87,
-                  fontSize: 15,
-                  height: 1.3,
-                ),
-              ),
-            ),
+            content,
           ],
         ),
       ),
