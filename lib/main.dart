@@ -250,8 +250,12 @@ class _AuthGateState extends State<AuthGate> {
       builder: (context, snapshot) {
         // 状态 1：系统正在扫描本地芯片中的 Token（转圈圈）
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator(color: Colors.black)),
+          return Scaffold(
+            body: Center(
+              child: CircularProgressIndicator(
+                color: Theme.of(context).colorScheme.primary,
+              ),
+            ),
           );
         }
 

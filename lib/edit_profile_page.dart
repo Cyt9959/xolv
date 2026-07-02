@@ -103,7 +103,9 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
             // 底部保存按钮
             _isLoading
-                ? const CircularProgressIndicator(color: Colors.black)
+                ? CircularProgressIndicator(
+                    color: Theme.of(context).colorScheme.primary,
+                  )
                 : ElevatedButton(
                     onPressed: _updateProfile,
                     style: ElevatedButton.styleFrom(

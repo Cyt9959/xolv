@@ -131,8 +131,10 @@ class _LoginPageState extends State<LoginPage> {
 
               // 加载圈圈
               if (_isLoading)
-                const Center(
-                  child: CircularProgressIndicator(color: Colors.black),
+                Center(
+                  child: CircularProgressIndicator(
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
                 )
               // ================= 状态 A：极简双按钮 =================
               else if (_currentState == LoginState.buttonsOnly) ...[

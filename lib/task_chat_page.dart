@@ -542,8 +542,12 @@ class _TaskChatPageState extends State<TaskChatPage> {
   @override
   Widget build(BuildContext context) {
     if (_isLoadingTaskMeta) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator(color: Colors.black)),
+      return Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(
+            color: Theme.of(context).colorScheme.primary,
+          ),
+        ),
       );
     }
 
@@ -719,8 +723,10 @@ class _TaskChatPageState extends State<TaskChatPage> {
                       .snapshots(),
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(
-                        child: CircularProgressIndicator(color: Colors.black),
+                      return Center(
+                        child: CircularProgressIndicator(
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
                       );
                     }
                     final docs = snapshot.data?.docs ?? [];

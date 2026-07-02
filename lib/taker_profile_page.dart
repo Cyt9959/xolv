@@ -212,10 +212,12 @@ class TakerProfilePage extends StatelessWidget {
                     .snapshots(),
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 24),
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 24),
                       child: Center(
-                        child: CircularProgressIndicator(color: Colors.black),
+                        child: CircularProgressIndicator(
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
                       ),
                     );
                   }
