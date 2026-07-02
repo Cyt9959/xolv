@@ -864,12 +864,6 @@ class _ProfileView extends StatelessWidget {
       length: 2,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text(
-            '个人中心',
-            style: TextStyle(fontWeight: FontWeight.bold),
-          ),
-          backgroundColor: Colors.white,
-          foregroundColor: Colors.black,
           elevation: 0,
           actions: [
             IconButton(

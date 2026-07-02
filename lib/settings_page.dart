@@ -31,6 +31,7 @@ class _SettingsPageState extends State<SettingsPage> {
   // 🌍 核心新增：极其丝滑的多语言选择弹窗
   void _showLanguagePicker() {
     final primaryColor = Theme.of(context).colorScheme.primary;
+    final onSurfaceColor = Theme.of(context).colorScheme.onSurface;
     const languages = {
       'zh': '简体中文',
       'en': 'English',
@@ -66,7 +67,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       fontWeight: isSelected
                           ? FontWeight.bold
                           : FontWeight.normal,
-                      color: isSelected ? primaryColor : Colors.black87,
+                      color: isSelected ? primaryColor : onSurfaceColor,
                       fontSize: 16,
                     ),
                   ),
@@ -101,12 +102,17 @@ class _SettingsPageState extends State<SettingsPage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('取消', style: TextStyle(color: Colors.grey)),
+            child: Text(
+              '取消',
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: Theme.of(context).colorScheme.primary,
-              foregroundColor: Colors.white,
+              foregroundColor: Theme.of(context).colorScheme.onPrimary,
             ),
             onPressed: () {
               Navigator.pop(ctx);
@@ -132,7 +138,10 @@ class _SettingsPageState extends State<SettingsPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('退出失败: $e'), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text('退出失败: $e'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
         );
       }
     }
@@ -143,18 +152,12 @@ class _SettingsPageState extends State<SettingsPage> {
     final primaryColor = Theme.of(context).colorScheme.primary;
 
     return Scaffold(
-      backgroundColor: Colors.grey[50],
       appBar: AppBar(
         title: Text(
           'settings'.tr(),
-          style: const TextStyle(
-            fontWeight: FontWeight.bold,
-            color: Colors.black,
-          ),
+          style: const TextStyle(fontWeight: FontWeight.bold),
         ),
-        backgroundColor: Colors.white,
         elevation: 0.5,
-        iconTheme: const IconThemeData(color: Colors.black),
         centerTitle: true,
       ),
       body: ListView(
@@ -182,10 +185,16 @@ class _SettingsPageState extends State<SettingsPage> {
           // 模块 2：通用设置
           _buildSectionTitle('通用与安全'),
           ListTile(
-            leading: const Icon(Icons.history, color: Colors.blueGrey),
+            leading: Icon(
+              Icons.history,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
             title: const Text('历史记录', style: TextStyle(fontWeight: FontWeight.w600)),
             subtitle: const Text('查看已完成的任务和委托'),
-            trailing: const Icon(Icons.chevron_right, color: Colors.grey),
+            trailing: Icon(
+              Icons.chevron_right,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const HistoryPage()),
@@ -205,7 +214,10 @@ class _SettingsPageState extends State<SettingsPage> {
               style: TextStyle(fontWeight: FontWeight.w600),
             ),
             subtitle: const Text('了解如何发单和接单'),
-            trailing: const Icon(Icons.chevron_right, color: Colors.grey),
+            trailing: Icon(
+              Icons.chevron_right,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const HowItWorksPage()),
@@ -251,10 +263,10 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
               ),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: Colors.redAccent,
+                backgroundColor: Theme.of(context).colorScheme.surface,
+                foregroundColor: Theme.of(context).colorScheme.error,
                 elevation: 0,
-                side: const BorderSide(color: Colors.redAccent),
+                side: BorderSide(color: Theme.of(context).colorScheme.error),
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -263,10 +275,13 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
           ),
           const SizedBox(height: 40),
-          const Center(
+          Center(
             child: Text(
               'XOLV v0.1.0 - 专为大马同城跑腿而生 🚀',
-              style: TextStyle(color: Colors.grey, fontSize: 12),
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                fontSize: 12,
+              ),
             ),
           ),
           const SizedBox(height: 40),
@@ -298,10 +313,10 @@ class _SettingsPageState extends State<SettingsPage> {
     required VoidCallback onTap,
   }) {
     return Container(
-      color: Colors.white,
+      color: Theme.of(context).colorScheme.surface,
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
-        leading: Icon(icon, color: Colors.black87),
+        leading: Icon(icon, color: Theme.of(context).colorScheme.onSurface),
         title: Text(
           title,
           style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 16),
@@ -309,10 +324,16 @@ class _SettingsPageState extends State<SettingsPage> {
         subtitle: subtitle != null
             ? Text(
                 subtitle,
-                style: const TextStyle(color: Colors.grey, fontSize: 13),
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  fontSize: 13,
+                ),
               )
             : null,
-        trailing: const Icon(Icons.chevron_right, color: Colors.grey),
+        trailing: Icon(
+          Icons.chevron_right,
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        ),
         onTap: onTap,
       ),
     );
@@ -327,17 +348,20 @@ class _SettingsPageState extends State<SettingsPage> {
     required ValueChanged<bool> onChanged,
   }) {
     return Container(
-      color: Colors.white,
+      color: Theme.of(context).colorScheme.surface,
       child: SwitchListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
-        secondary: Icon(icon, color: Colors.black87),
+        secondary: Icon(icon, color: Theme.of(context).colorScheme.onSurface),
         title: Text(
           title,
           style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 16),
         ),
         subtitle: Text(
           subtitle,
-          style: const TextStyle(color: Colors.grey, fontSize: 13),
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+            fontSize: 13,
+          ),
         ),
         // 💡 修复2：彻底删除了老旧被淘汰的 activeColor 写法
         value: value,
