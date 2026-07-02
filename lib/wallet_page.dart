@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'theme/app_theme.dart';
+import 'widgets/app_skeleton.dart';
 
 class WalletPage extends StatefulWidget {
   const WalletPage({super.key});
@@ -219,9 +221,7 @@ class _WalletPageState extends State<WalletPage> {
                       builder: (context, snapshot) {
                         if (snapshot.connectionState ==
                             ConnectionState.waiting) {
-                          return const Center(
-                            child: CircularProgressIndicator(),
-                          );
+                          return const _WalletSkeletonList();
                         }
 
                         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
@@ -360,6 +360,56 @@ class _WalletPageState extends State<WalletPage> {
           ],
         ),
       ),
+    );
+  }
+}
+
+// ==========================================
+// 💀 交易流水加载骨架屏
+// ==========================================
+class _WalletSkeletonRow extends StatelessWidget {
+  const _WalletSkeletonRow();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+      child: Row(
+        children: [
+          const AppSkeleton(
+            width: 40,
+            height: 40,
+            borderRadius: AppRadius.sm,
+          ),
+          const SizedBox(width: AppSpacing.md),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                AppSkeleton(width: 120, height: 14),
+                SizedBox(height: AppSpacing.xs),
+                AppSkeleton(width: 80, height: 12),
+              ],
+            ),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          const AppSkeleton(width: 60, height: 16),
+        ],
+      ),
+    );
+  }
+}
+
+class _WalletSkeletonList extends StatelessWidget {
+  const _WalletSkeletonList();
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView.separated(
+      itemCount: 6,
+      separatorBuilder: (context, index) =>
+          const SizedBox(height: AppSpacing.md),
+      itemBuilder: (context, index) => const _WalletSkeletonRow(),
     );
   }
 }

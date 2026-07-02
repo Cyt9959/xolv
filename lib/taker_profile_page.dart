@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'theme/app_theme.dart';
+import 'widgets/app_skeleton.dart';
 
 // ==========================================
 // 👤 接单人个人主页（数据化版本）
@@ -42,9 +44,7 @@ class TakerProfilePage extends StatelessWidget {
               foregroundColor: Colors.black,
               elevation: 0.5,
             ),
-            body: const Center(
-              child: CircularProgressIndicator(color: Colors.black),
-            ),
+            body: const _ProfileSkeleton(),
           );
         }
 
@@ -486,6 +486,73 @@ class TakerLevelBadge extends StatelessWidget {
           level: TakerProfilePage.getLevel(completedTasks, avgRating),
         );
       },
+    );
+  }
+}
+
+// ==========================================
+// 💀 个人主页加载骨架屏
+// ==========================================
+class _ProfileSkeleton extends StatelessWidget {
+  const _ProfileSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      children: const [
+        Center(
+          child: Column(
+            children: [
+              AppSkeleton(
+                width: 72,
+                height: 72,
+                borderRadius: AppRadius.full,
+              ),
+              SizedBox(height: AppSpacing.sm),
+              AppSkeleton(width: 140, height: 18),
+            ],
+          ),
+        ),
+        SizedBox(height: AppSpacing.lg),
+        Row(
+          children: [
+            Expanded(
+              child: AppSkeleton(height: 64, borderRadius: AppRadius.md),
+            ),
+            SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: AppSkeleton(height: 64, borderRadius: AppRadius.md),
+            ),
+            SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: AppSkeleton(height: 64, borderRadius: AppRadius.md),
+            ),
+          ],
+        ),
+        SizedBox(height: AppSpacing.lg),
+        _ProfileReviewSkeletonItem(),
+        SizedBox(height: AppSpacing.sm),
+        _ProfileReviewSkeletonItem(),
+        SizedBox(height: AppSpacing.sm),
+        _ProfileReviewSkeletonItem(),
+      ],
+    );
+  }
+}
+
+class _ProfileReviewSkeletonItem extends StatelessWidget {
+  const _ProfileReviewSkeletonItem();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        AppSkeleton(width: 100, height: 14),
+        SizedBox(height: AppSpacing.xs),
+        AppSkeleton(height: 12),
+      ],
     );
   }
 }

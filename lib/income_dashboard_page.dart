@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'theme/app_theme.dart';
+import 'widgets/app_skeleton.dart';
 
 // ==========================================
 // 📊 接单人收入仪表板
@@ -49,9 +51,7 @@ class IncomeDashboardPage extends StatelessWidget {
             .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(
-              child: CircularProgressIndicator(color: Colors.black),
-            );
+            return const _IncomeSkeleton();
           }
 
           final docs = snapshot.data?.docs ?? [];
@@ -273,6 +273,39 @@ class _CompletedTasksCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+// ==========================================
+// 💀 收入仪表板加载骨架屏
+// ==========================================
+class _IncomeSkeleton extends StatelessWidget {
+  const _IncomeSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      children: const [
+        Row(
+          children: [
+            Expanded(
+              child: AppSkeleton(height: 80, borderRadius: AppRadius.md),
+            ),
+            SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: AppSkeleton(height: 80, borderRadius: AppRadius.md),
+            ),
+            SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: AppSkeleton(height: 80, borderRadius: AppRadius.md),
+            ),
+          ],
+        ),
+        SizedBox(height: AppSpacing.lg),
+        AppSkeleton(height: 160, borderRadius: AppRadius.lg),
+      ],
     );
   }
 }

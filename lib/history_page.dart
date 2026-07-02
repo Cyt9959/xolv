@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'task_detail_page.dart';
+import 'theme/app_theme.dart';
+import 'widgets/app_skeleton.dart';
 
 class HistoryPage extends StatelessWidget {
   const HistoryPage({super.key});
@@ -55,7 +57,7 @@ class _CompletedAcceptedView extends StatelessWidget {
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
+          return const _HistorySkeletonList();
         }
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
           return const Center(
@@ -83,7 +85,7 @@ class _CompletedPostedView extends StatelessWidget {
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
+          return const _HistorySkeletonList();
         }
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
           return const Center(
@@ -172,6 +174,43 @@ class _HistoryList extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+// ==========================================
+// 💀 历史记录加载骨架屏
+// ==========================================
+class _HistorySkeletonList extends StatelessWidget {
+  const _HistorySkeletonList();
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final borderColor = isDark ? AppColors.borderDark : AppColors.borderLight;
+
+    return ListView.separated(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      itemCount: 5,
+      separatorBuilder: (context, index) =>
+          const SizedBox(height: AppSpacing.md),
+      itemBuilder: (context, index) => Container(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          border: Border.all(color: borderColor),
+        ),
+        child: const Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            AppSkeleton(width: 160, height: 16),
+            SizedBox(height: AppSpacing.sm),
+            AppSkeleton(height: 13),
+            SizedBox(height: AppSpacing.xs),
+            AppSkeleton(width: 200, height: 13),
+          ],
+        ),
+      ),
     );
   }
 }

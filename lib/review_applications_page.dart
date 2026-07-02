@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'taker_profile_page.dart';
+import 'theme/app_theme.dart';
+import 'widgets/app_skeleton.dart';
 
 class ReviewApplicationsPage extends StatelessWidget {
   final String taskId;
@@ -114,9 +116,7 @@ class ReviewApplicationsPage extends StatelessWidget {
             .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(
-              child: CircularProgressIndicator(color: Colors.black),
-            );
+            return const _ApplicationSkeletonList();
           }
           final apps = snapshot.data?.docs ?? [];
           if (apps.isEmpty) {
@@ -341,6 +341,53 @@ class ReviewApplicationsPage extends StatelessWidget {
             },
           );
         },
+      ),
+    );
+  }
+}
+
+// ==========================================
+// 💀 申请列表加载骨架屏
+// ==========================================
+class _ApplicationSkeletonList extends StatelessWidget {
+  const _ApplicationSkeletonList();
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final borderColor = isDark ? AppColors.borderDark : AppColors.borderLight;
+
+    return ListView.separated(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      itemCount: 4,
+      separatorBuilder: (context, index) =>
+          const SizedBox(height: AppSpacing.md),
+      itemBuilder: (context, index) => Container(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          border: Border.all(color: borderColor),
+        ),
+        child: Row(
+          children: [
+            const AppSkeleton(
+              width: 44,
+              height: 44,
+              borderRadius: AppRadius.full,
+            ),
+            const SizedBox(width: AppSpacing.md),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  AppSkeleton(width: 120, height: 15),
+                  SizedBox(height: AppSpacing.xs),
+                  AppSkeleton(width: 180, height: 12),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
