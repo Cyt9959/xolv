@@ -10,6 +10,7 @@ import 'package:video_player/video_player.dart';
 import 'raise_dispute_page.dart';
 import 'voice_call_page.dart';
 import 'video_call_page.dart';
+import 'theme/app_theme.dart';
 
 class TaskChatPage extends StatefulWidget {
   final String taskId;
@@ -43,9 +44,6 @@ class _TaskChatPageState extends State<TaskChatPage> {
   bool _isUploadingMedia = false;
   String _otherPartyName = 'XOLV 伙伴';
   StreamSubscription<DocumentSnapshot>? _callSub;
-
-  // 🎨 聊天室拍照/拍视频功能的强调色
-  static const Color _brandColor = Color(0xFFFF5E00);
 
   // 💡 任务元数据：有 widget 参数就直接用，否则用 taskId 自行从 Firestore 拉取
   bool _isLoadingTaskMeta = true;
@@ -158,9 +156,9 @@ class _TaskChatPageState extends State<TaskChatPage> {
       if (status == 'rejected') {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('对方拒绝了通话'),
-              backgroundColor: Colors.red,
+            SnackBar(
+              content: const Text('对方拒绝了通话'),
+              backgroundColor: Theme.of(context).colorScheme.error,
             ),
           );
           Navigator.pop(context);
@@ -168,9 +166,11 @@ class _TaskChatPageState extends State<TaskChatPage> {
       } else if (status == 'timeout') {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('对方无响应'),
-              backgroundColor: Colors.orange,
+            SnackBar(
+              content: const Text('对方无响应'),
+              backgroundColor: Theme.of(context).brightness == Brightness.dark
+                  ? AppColors.warningDark
+                  : AppColors.warningLight,
             ),
           );
           Navigator.pop(context);
@@ -296,10 +296,15 @@ class _TaskChatPageState extends State<TaskChatPage> {
                 leading: Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: _brandColor.withValues(alpha: 0.1),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.primary.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Icon(Icons.camera_alt, color: _brandColor),
+                  child: Icon(
+                    Icons.camera_alt,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
                 ),
                 title: const Text(
                   '拍照',
@@ -446,7 +451,9 @@ class _TaskChatPageState extends State<TaskChatPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(isVideo ? '✅ 视频已发送' : '✅ 图片已发送'),
-            backgroundColor: Colors.green,
+            backgroundColor: Theme.of(context).brightness == Brightness.dark
+                ? AppColors.successDark
+                : AppColors.successLight,
             duration: const Duration(seconds: 2),
           ),
         );
@@ -455,7 +462,10 @@ class _TaskChatPageState extends State<TaskChatPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).hideCurrentSnackBar();
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('上传失败: $e'), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text('上传失败: $e'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
         );
       }
     } finally {
@@ -551,8 +561,10 @@ class _TaskChatPageState extends State<TaskChatPage> {
       );
     }
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
       appBar: AppBar(
         title: Column(
           children: [
@@ -562,33 +574,42 @@ class _TaskChatPageState extends State<TaskChatPage> {
             ),
             Text(
               _taskDescription,
-              style: const TextStyle(fontSize: 12, color: Colors.grey),
+              style: TextStyle(
+                fontSize: 12,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
           ],
         ),
-        backgroundColor: Colors.white,
+        backgroundColor: Theme.of(context).colorScheme.surface,
         elevation: 0.5,
-        foregroundColor: Colors.black,
+        foregroundColor: Theme.of(context).colorScheme.onSurface,
         centerTitle: true,
         actions: [
           // 📞 语音通话
           IconButton(
-            icon: const Icon(Icons.call, color: Colors.green),
+            icon: Icon(
+              Icons.call,
+              color: isDark ? AppColors.successDark : AppColors.successLight,
+            ),
             tooltip: '语音通话',
             onPressed: () => _startCall('voice'),
           ),
           // 📹 视频通话
           IconButton(
-            icon: const Icon(Icons.videocam, color: Color(0xFFFF5E00)),
+            icon: Icon(
+              Icons.videocam,
+              color: Theme.of(context).colorScheme.primary,
+            ),
             tooltip: '视频通话',
             onPressed: () => _startCall('video'),
           ),
           IconButton(
-            icon: const Icon(
+            icon: Icon(
               Icons.local_police,
-              color: Colors.redAccent,
+              color: Theme.of(context).colorScheme.error,
               size: 28,
             ),
             tooltip: '提交纠纷',
@@ -654,12 +675,15 @@ class _TaskChatPageState extends State<TaskChatPage> {
                   vertical: 10,
                   horizontal: 16,
                 ),
-                color: Colors.green[50],
+                color: (isDark ? AppColors.successDark : AppColors.successLight)
+                    .withValues(alpha: 0.1),
                 child: Text(
                   distanceText,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: Colors.green,
+                  style: TextStyle(
+                    color: isDark
+                        ? AppColors.successDark
+                        : AppColors.successLight,
                     fontSize: 13,
                     fontWeight: FontWeight.bold,
                     letterSpacing: 0.5,
@@ -671,14 +695,17 @@ class _TaskChatPageState extends State<TaskChatPage> {
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(12),
-                  color: Colors.orange[50],
+                  color: (isDark ? AppColors.warningDark : AppColors.warningLight)
+                      .withValues(alpha: 0.1),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
+                      Text(
                         '📸 接单人已上传完工证明',
                         style: TextStyle(
-                          color: Colors.orange,
+                          color: isDark
+                              ? AppColors.warningDark
+                              : AppColors.warningLight,
                           fontSize: 13,
                           fontWeight: FontWeight.bold,
                         ),
@@ -752,7 +779,7 @@ class _TaskChatPageState extends State<TaskChatPage> {
               // 🌟 核心升级：横向滑动的快捷短语胶囊舱
               Container(
                 height: 48,
-                color: Colors.white,
+                color: Theme.of(context).colorScheme.surface,
                 child: ListView.builder(
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.symmetric(
@@ -771,7 +798,8 @@ class _TaskChatPageState extends State<TaskChatPage> {
                             fontWeight: FontWeight.w500,
                           ),
                         ),
-                        backgroundColor: Colors.grey[100],
+                        backgroundColor:
+                            Theme.of(context).colorScheme.surfaceContainerHighest,
                         side: BorderSide.none,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(20),
@@ -792,7 +820,7 @@ class _TaskChatPageState extends State<TaskChatPage> {
                   vertical: 12,
                 ),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: Theme.of(context).colorScheme.surface,
                   boxShadow: [
                     BoxShadow(
                       color: Colors.black.withValues(alpha: 0.05),
@@ -814,7 +842,7 @@ class _TaskChatPageState extends State<TaskChatPage> {
                                 ),
                               )
                             : const Icon(Icons.add_circle_outline),
-                        color: _brandColor,
+                        color: Theme.of(context).colorScheme.primary,
                         onPressed: _isUploadingMedia ? null : _showMediaPicker,
                       ),
                       Expanded(
@@ -827,7 +855,8 @@ class _TaskChatPageState extends State<TaskChatPage> {
                               borderSide: BorderSide.none,
                             ),
                             filled: true,
-                            fillColor: Colors.grey[100],
+                            fillColor:
+                                Theme.of(context).colorScheme.surfaceContainerHighest,
                             contentPadding: const EdgeInsets.symmetric(
                               horizontal: 20,
                               vertical: 12,
@@ -838,11 +867,11 @@ class _TaskChatPageState extends State<TaskChatPage> {
                       ),
                       CircleAvatar(
                         radius: 22,
-                        backgroundColor: Colors.black,
+                        backgroundColor: Theme.of(context).colorScheme.primary,
                         child: IconButton(
-                          icon: const Icon(
+                          icon: Icon(
                             Icons.send,
-                            color: Colors.white,
+                            color: Theme.of(context).colorScheme.onPrimary,
                             size: 18,
                           ),
                           onPressed: () => _sendMessage(),
@@ -866,6 +895,7 @@ class _TaskChatPageState extends State<TaskChatPage> {
     String type = 'text',
     String? mediaUrl,
   }) {
+    final colorScheme = Theme.of(context).colorScheme;
     Widget content;
     if (type == 'image' && mediaUrl != null) {
       content = GestureDetector(
@@ -928,8 +958,8 @@ class _TaskChatPageState extends State<TaskChatPage> {
       content = Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
-          color: isMe ? Colors.black : Colors.white,
-          border: isMe ? null : Border.all(color: Colors.black12),
+          color: isMe ? colorScheme.primary : colorScheme.surface,
+          border: isMe ? null : Border.all(color: colorScheme.outline),
           borderRadius: BorderRadius.only(
             topLeft: const Radius.circular(16),
             topRight: const Radius.circular(16),
@@ -940,7 +970,7 @@ class _TaskChatPageState extends State<TaskChatPage> {
         child: Text(
           text,
           style: TextStyle(
-            color: isMe ? Colors.white : Colors.black87,
+            color: isMe ? colorScheme.onPrimary : colorScheme.onSurface,
             fontSize: 15,
             height: 1.3,
           ),
@@ -964,7 +994,12 @@ class _TaskChatPageState extends State<TaskChatPage> {
               padding: const EdgeInsets.only(left: 4, right: 4, bottom: 4),
               child: Text(
                 name,
-                style: const TextStyle(fontSize: 11, color: Colors.grey),
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? AppColors.textTertiaryDark
+                      : AppColors.textTertiaryLight,
+                ),
               ),
             ),
             content,
