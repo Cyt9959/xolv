@@ -18,6 +18,8 @@ import 'kyc_page.dart';
 import 'screens/kyc_review_page.dart';
 import 'taker_profile_page.dart';
 import 'income_dashboard_page.dart';
+import 'widgets/app_skeleton.dart';
+import 'widgets/app_empty_state.dart';
 import 'receipt_page.dart';
 
 class MainSquarePage extends StatefulWidget {
@@ -390,9 +392,7 @@ https://cytxolv.com/task/$taskId
                   .snapshots(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return Center(
-                    child: CircularProgressIndicator(color: primaryColor),
-                  );
+                  return const AppSkeletonList();
                 }
                 final rawDocs = snapshot.data?.docs ?? [];
                 final List<Map<String, dynamic>> sortedFilteredTasks = [];
@@ -430,12 +430,10 @@ https://cytxolv.com/task/$taskId
                 );
 
                 if (sortedFilteredTasks.isEmpty) {
-                  return const Center(
-                    child: Text(
-                      '在此范围内暂无新委托\n试着拉大雷达距离吧！',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.grey),
-                    ),
+                  return const AppEmptyState(
+                    icon: Icons.inbox_outlined,
+                    title: '这里还没有任务',
+                    subtitle: '下拉刷新，或成为第一个发布任务的人',
                   );
                 }
 
