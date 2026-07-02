@@ -1401,12 +1401,12 @@ class _ProfileView extends StatelessWidget {
                   indicatorColor: primaryColor,
                   unselectedLabelColor: Colors.grey,
                   tabs: [
-                    const Tab(text: '我的任务'),
+                    const Tab(text: '任务'),
                     Tab(
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Text('我的委托'),
+                          const Text('委托'),
                           if (hasAnyPending)
                             Container(
                               margin: const EdgeInsets.only(left: 4),
