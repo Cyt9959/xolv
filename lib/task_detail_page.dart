@@ -3,6 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:share_plus/share_plus.dart';
 import 'kyc_page.dart';
+import 'theme/app_theme.dart';
+import 'widgets/app_tappable.dart';
 
 class TaskDetailPage extends StatefulWidget {
   final String taskId;
@@ -611,7 +613,8 @@ https://cytxolv.com/task/$taskId
                 child: ListView.builder(
                   scrollDirection: Axis.horizontal,
                   itemCount: (data['imageUrls'] as List).length,
-                  itemBuilder: (ctx, i) => GestureDetector(
+                  itemBuilder: (ctx, i) => AppTappable(
+                    borderRadius: AppRadius.md,
                     onTap: () => _showFullImage(context, data['imageUrls'][i]),
                     child: Container(
                       margin: const EdgeInsets.only(right: 8),
