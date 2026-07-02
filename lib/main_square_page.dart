@@ -18,8 +18,10 @@ import 'kyc_page.dart';
 import 'screens/kyc_review_page.dart';
 import 'taker_profile_page.dart';
 import 'income_dashboard_page.dart';
+import 'theme/app_theme.dart';
 import 'widgets/app_skeleton.dart';
 import 'widgets/app_empty_state.dart';
+import 'widgets/app_tappable.dart';
 import 'receipt_page.dart';
 
 class MainSquarePage extends StatefulWidget {
@@ -995,7 +997,8 @@ class _ProfileView extends StatelessWidget {
                                         user.email ==
                                             'chuitheen@gmail.com') ...[
                                       const SizedBox(width: 6),
-                                      GestureDetector(
+                                      AppTappable(
+                                        borderRadius: 20,
                                         onTap: () => Navigator.push(
                                           context,
                                           MaterialPageRoute(
@@ -1162,7 +1165,8 @@ class _ProfileView extends StatelessWidget {
                                       return Row(
                                         children: [
                                           Expanded(
-                                            child: GestureDetector(
+                                            child: AppTappable(
+                                              borderRadius: AppRadius.lg,
                                               onTap: () => Navigator.push(
                                                 context,
                                                 MaterialPageRoute(
@@ -1213,7 +1217,8 @@ class _ProfileView extends StatelessWidget {
                                           ),
                                           const SizedBox(width: 10),
                                           Expanded(
-                                            child: GestureDetector(
+                                            child: AppTappable(
+                                              borderRadius: AppRadius.lg,
                                               onTap: () => Navigator.push(
                                                 context,
                                                 MaterialPageRoute(
@@ -2165,7 +2170,8 @@ class _MyAcceptedTasksViewState extends State<_MyAcceptedTasksView> {
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   itemCount: existingPhotos.length,
-                  itemBuilder: (ctx, i) => GestureDetector(
+                  itemBuilder: (ctx, i) => AppTappable(
+                    borderRadius: 10,
                     onTap: () =>
                         _showFullProofImage(context, existingPhotos[i]),
                     child: Container(
